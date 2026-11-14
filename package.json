@@ -1,0 +1,10 @@
+{
+  "name": "drbck-tech-it-pro",
+  "version": "1.0.0",
+  "description": "Serveur IA de DRBCK TECH.IT.PRO",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}
