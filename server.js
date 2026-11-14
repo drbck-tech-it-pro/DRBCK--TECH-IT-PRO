@@ -1,4 +1,3 @@
-```javascript
 const http = require("http");
 
 const SITE = "https://drbck-tech-it-pro.github.io";
@@ -74,8 +73,10 @@ const server = http.createServer(async (req, res) => {
 
     const data = JSON.parse(body);
 
-    if (typeof data.message !== "string" ||
-        !data.message.trim()) {
+    if (
+      typeof data.message !== "string" ||
+      !data.message.trim()
+    ) {
       res.writeHead(400);
       return res.end(JSON.stringify({
         error: "Message invalide."
@@ -127,4 +128,3 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(process.env.PORT || 3000);
-```
