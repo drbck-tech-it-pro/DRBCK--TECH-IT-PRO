@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -5,12 +6,83 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DRBCK TECH.IT.PRO - Likasi</title>
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    .ia-section {
+      max-width: 650px;
+      margin: 30px auto;
+      padding: 20px;
+      background: #101d35;
+      color: white;
+      border-radius: 12px;
+    }
+
+    .ia-section h2 {
+      color: #d4af37;
+      text-align: center;
+    }
+
+    #ia-messages {
+      height: 300px;
+      overflow-y: auto;
+      background: #ffffff;
+      color: #222;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+
+    .ia-message {
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 8px;
+      overflow-wrap: anywhere;
+    }
+
+    .ia-user {
+      background: #e5e5e5;
+      text-align: right;
+    }
+
+    .ia-bot {
+      background: #dce8f7;
+      text-align: left;
+    }
+
+    .ia-input-zone {
+      display: flex;
+      gap: 8px;
+    }
+
+    #ia-question {
+      flex: 1;
+      min-width: 0;
+      padding: 12px;
+      border-radius: 7px;
+      border: none;
+    }
+
+    #ia-send {
+      padding: 12px 16px;
+      background: #d4af37;
+      color: #101d35;
+      border: none;
+      border-radius: 7px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #ia-send:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+  </style>
 </head>
 
 <body>
 
   <header id="accueil">
-<img src="logo.jpg" alt="Logo DRBCK TECH.IT.PRO" class="logo">
+    <img src="logo.jpg" alt="Logo DRBCK TECH.IT.PRO" class="logo">
 
     <h1>DRBCK TECH.IT.PRO</h1>
     <p>Service rapide et fiable à Likasi</p>
@@ -19,6 +91,7 @@
       <a href="#accueil">Accueil</a>
       <a href="#services">Services</a>
       <a href="#paiements">Paiements</a>
+      <a href="#ia">DRBCK TECH IA</a>
       <a href="#contact">Contact</a>
     </nav>
   </header>
@@ -53,6 +126,34 @@
       </div>
     </section>
 
+    <section id="ia" class="ia-section">
+      <h2>DRBCK TECH IA</h2>
+
+      <p>
+        Bonjour ! Je suis l'assistant intelligent de
+        DRBCK TECH.IT.PRO. Posez-moi vos questions.
+      </p>
+
+      <div id="ia-messages">
+        <div class="ia-message ia-bot">
+          Bonjour ! Comment puis-je vous aider aujourd'hui ?
+        </div>
+      </div>
+
+      <form id="ia-form" class="ia-input-zone">
+        <input
+          type="text"
+          id="ia-question"
+          placeholder="Écrivez votre message..."
+          required
+        >
+
+        <button type="submit" id="ia-send">
+          Envoyer
+        </button>
+      </form>
+    </section>
+
     <section id="contact">
       <h2>Contactez-nous</h2>
       <p>Nous sommes disponibles à Likasi.</p>
@@ -71,5 +172,75 @@
 
   <script src="script.js"></script>
 
+  <script>
+    const iaForm = document.getElementById("ia-form");
+    const iaQuestion = document.getElementById("ia-question");
+    const iaMessages = document.getElementById("ia-messages");
+    const iaSend = document.getElementById("ia-send");
+
+    const adresseIA = "https://drbck-tech-it-pro.onrender.com/api/chat";
+
+    function ajouterMessage(texte, classe) {
+      const message = document.createElement("div");
+      message.className = "ia-message " + classe;
+      message.textContent = texte;
+      iaMessages.appendChild(message);
+      iaMessages.scrollTop = iaMessages.scrollHeight;
+    }
+
+    iaForm.addEventListener("submit", async function(e) {
+      e.preventDefault();
+
+      const question = iaQuestion.value.trim();
+
+      if (!question) return;
+
+      ajouterMessage(question, "ia-user");
+      iaQuestion.value = "";
+      iaSend.disabled = true;
+      iaSend.textContent = "Envoi...";
+
+      try {
+        const reponse = await fetch(adresseIA, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            message: question
+          })
+        });
+
+        const resultat = await reponse.json();
+
+        if (!reponse.ok) {
+          throw new Error(resultat.error || "Erreur du serveur.");
+        }
+
+        const texteIA =
+          resultat.reply ||
+          resultat.output_text ||
+          resultat.message;
+
+        if (typeof texteIA !== "string" || !texteIA.trim()) {
+          throw new Error("Réponse IA introuvable.");
+        }
+
+        ajouterMessage(texteIA, "ia-bot");
+
+      } catch (erreur) {
+        ajouterMessage(
+          "Désolé, le service IA ne répond pas pour le moment. Réessayez plus tard.",
+          "ia-bot"
+        );
+      }
+
+      iaSend.disabled = false;
+      iaSend.textContent = "Envoyer";
+      iaQuestion.focus();
+    });
+  </script>
+
 </body>
 </html>
+```
