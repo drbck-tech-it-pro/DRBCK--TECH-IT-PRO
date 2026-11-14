@@ -6,15 +6,24 @@ const requests = new Map();
 const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin;
 
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader(
+    "Content-Type",
+    "application/json; charset=utf-8"
+  );
 
   if (origin === SITE) {
     res.setHeader("Access-Control-Allow-Origin", SITE);
   }
 
   res.setHeader("Vary", "Origin");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "POST, OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type"
+  );
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);
@@ -38,7 +47,9 @@ const server = http.createServer(async (req, res) => {
   const ip = req.socket.remoteAddress;
   const now = Date.now();
   const previous = requests.get(ip) || [];
-  const recent = previous.filter(t => now - t < 60000);
+  const recent = previous.filter(
+    t => now - t < 60000
+  );
 
   if (recent.length >= 10) {
     res.writeHead(429);
@@ -89,7 +100,7 @@ const server = http.createServer(async (req, res) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+          "Authorization": "Bearer " + process.env.OPENAI_API_KEY
         },
         body: JSON.stringify({
           model: process.env.OPENAI_MODEL || "gpt-6-luna",
@@ -120,6 +131,8 @@ const server = http.createServer(async (req, res) => {
     }));
 
   } catch (error) {
+    console.error(error);
+
     res.writeHead(500);
     res.end(JSON.stringify({
       error: "Impossible de contacter l'assistant IA."
