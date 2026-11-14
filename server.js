@@ -1,3 +1,4 @@
+```javascript
 const http = require("http");
 
 const SITE = "https://drbck-tech-it-pro.github.io";
@@ -38,7 +39,6 @@ const server = http.createServer(async (req, res) => {
   const ip = req.socket.remoteAddress;
   const now = Date.now();
   const previous = requests.get(ip) || [];
-
   const recent = previous.filter(t => now - t < 60000);
 
   if (recent.length >= 10) {
@@ -100,12 +100,22 @@ const server = http.createServer(async (req, res) => {
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error("Erreur API");
+      throw new Error("Erreur API OpenAI");
+    }
+
+    const texte = (result.output || [])
+      .flatMap(item => item.content || [])
+      .filter(item => item.type === "output_text")
+      .map(item => item.text)
+      .join("\n");
+
+    if (!texte.trim()) {
+      throw new Error("Réponse IA vide");
     }
 
     res.writeHead(200);
     res.end(JSON.stringify({
-      answer: result.output_text || "Aucune réponse reçue."
+      reply: texte
     }));
 
   } catch (error) {
@@ -117,3 +127,4 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(process.env.PORT || 3000);
+```
