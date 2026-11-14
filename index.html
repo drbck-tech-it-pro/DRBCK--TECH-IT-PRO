@@ -3,52 +3,66 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>DRBCK TECH.IT.PRO - Likasi</title>
+
+  <meta name="description" content="DRBCK TECH.IT.PRO à Likasi : dépannage informatique, maintenance, installation de logiciels et assistance informatique.">
+
   <link rel="stylesheet" href="style.css">
 
   <style>
-    .ia-section {
-      max-width: 650px;
-      margin: 30px auto;
-      padding: 20px;
-      background: #101d35;
-      color: white;
-      border-radius: 12px;
+    #ia {
+      padding: 40px 20px;
+      background: #f4f6fa;
+      text-align: center;
     }
 
-    .ia-section h2 {
-      color: #d4af37;
-      text-align: center;
+    .ia-container {
+      max-width: 700px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .ia-container h2 {
+      color: #10264a;
     }
 
     #ia-messages {
       height: 300px;
       overflow-y: auto;
-      background: #ffffff;
-      color: #222;
+      border: 1px solid #ddd;
+      border-radius: 10px;
       padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 12px;
+      margin: 15px 0;
+      text-align: left;
+      background: #fafafa;
     }
 
     .ia-message {
       padding: 10px;
       margin: 8px 0;
-      border-radius: 8px;
+      border-radius: 10px;
+      max-width: 85%;
+      white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
 
     .ia-user {
-      background: #e5e5e5;
-      text-align: right;
+      background: #10264a;
+      color: white;
+      margin-left: auto;
     }
 
     .ia-bot {
-      background: #dce8f7;
-      text-align: left;
+      background: #e8edf5;
+      color: #222;
+      margin-right: auto;
     }
 
-    .ia-input-zone {
+    .ia-input {
       display: flex;
       gap: 8px;
     }
@@ -57,31 +71,34 @@
       flex: 1;
       min-width: 0;
       padding: 12px;
-      border-radius: 7px;
-      border: none;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
     }
 
     #ia-send {
-      padding: 12px 16px;
-      background: #d4af37;
-      color: #101d35;
+      padding: 12px 18px;
       border: none;
-      border-radius: 7px;
+      border-radius: 8px;
+      background: #d4a62a;
+      color: #10264a;
       font-weight: bold;
       cursor: pointer;
     }
 
     #ia-send:disabled {
       opacity: 0.6;
-      cursor: wait;
+      cursor: not-allowed;
     }
   </style>
 </head>
 
 <body>
 
-  <header id="accueil">
-    <img src="logo.jpg" alt="Logo DRBCK TECH.IT.PRO" class="logo">
+  <header>
+    <div class="logo">
+      <img src="logo.jpg" alt="Logo DRBCK TECH.IT.PRO">
+    </div>
 
     <h1>DRBCK TECH.IT.PRO</h1>
     <p>Service rapide et fiable à Likasi</p>
@@ -89,7 +106,6 @@
     <nav>
       <a href="#accueil">Accueil</a>
       <a href="#services">Services</a>
-      <a href="#paiements">Paiements</a>
       <a href="#ia">DRBCK TECH IA</a>
       <a href="#contact">Contact</a>
     </nav>
@@ -97,146 +113,177 @@
 
   <main>
 
-    <section class="presentation">
+    <section id="accueil">
       <h2>Bienvenue chez DRBCK TECH.IT.PRO</h2>
+
       <p>
-        Votre partenaire en informatique et en dépannage
-        de téléphones à Likasi.
-        Nous proposons des solutions rapides et fiables.
+        Votre partenaire en informatique à Likasi.
+        Nous proposons des services de dépannage,
+        maintenance, installation et assistance informatique.
       </p>
+
+      <a href="#services" class="btn">Découvrir nos services</a>
     </section>
 
     <section id="services">
-      <h2>Nos services</h2>
+      <h2>Nos services informatiques</h2>
+
+      <p>
+        Découvrez nos prestations et contactez-nous
+        pour bénéficier de notre assistance.
+      </p>
+
       <div id="services-list"></div>
     </section>
 
-    <section id="paiements">
-      <h2>Moyens de paiement</h2>
-
-      <div class="payment-card">
-        <h3>Mobile Money</h3>
-        <p>Contactez-nous pour obtenir nos coordonnées.</p>
-      </div>
-
-      <div class="payment-card">
-        <h3>PayPal</h3>
-        <p>Contactez-nous pour obtenir notre lien de paiement.</p>
-      </div>
-    </section>
-
-    <section id="ia" class="ia-section">
-      <h2>DRBCK TECH IA</h2>
+    <section id="paiement">
+      <h2>Options de paiement</h2>
 
       <p>
-        Bonjour ! Je suis l'assistant intelligent de
-        DRBCK TECH.IT.PRO. Posez-moi vos questions.
+        Pour les modalités de paiement, contactez directement
+        notre service client.
       </p>
+    </section>
 
-      <div id="ia-messages">
-        <div class="ia-message ia-bot">
-          Bonjour ! Comment puis-je vous aider aujourd'hui ?
+    <section id="ia">
+      <div class="ia-container">
+
+        <h2>DRBCK TECH IA</h2>
+
+        <p>
+          Votre assistant intelligent est disponible
+          pour répondre à vos questions informatiques.
+        </p>
+
+        <div id="ia-messages">
+          <div class="ia-message ia-bot">
+            Bonjour ! Je suis DRBCK TECH IA.
+            Comment puis-je vous aider ?
+          </div>
         </div>
+
+        <form id="ia-form">
+          <div class="ia-input">
+            <input
+              type="text"
+              id="ia-question"
+              placeholder="Écrivez votre message..."
+              autocomplete="off"
+              required
+            >
+
+            <button type="submit" id="ia-send">
+              Envoyer
+            </button>
+          </div>
+        </form>
+
       </div>
-
-      <form id="ia-form" class="ia-input-zone">
-        <input
-          type="text"
-          id="ia-question"
-          placeholder="Écrivez votre message..."
-          required
-        >
-
-        <button type="submit" id="ia-send">
-          Envoyer
-        </button>
-      </form>
     </section>
 
     <section id="contact">
       <h2>Contactez-nous</h2>
-      <p>Nous sommes disponibles à Likasi.</p>
 
-      <a href="#" id="whatsapp-link" class="button">
-        Commander sur WhatsApp
+      <p>DRBCK TECH.IT.PRO</p>
+      <p>Likasi, République démocratique du Congo</p>
+
+      <p>
+        WhatsApp :
+        <a href="https://wa.me/243972052103">
+          +243 972 052 103
+        </a>
+      </p>
+
+      <a
+        href="https://wa.me/243972052103"
+        target="_blank"
+        rel="noopener"
+        class="btn"
+      >
+        Nous contacter sur WhatsApp
       </a>
     </section>
 
   </main>
 
   <footer>
-    <p>© 2026 DRBCK TECH.IT.PRO</p>
-    <p>Service rapide et fiable à Likasi.</p>
+    <p>
+      © 2026 DRBCK TECH.IT.PRO.
+      Tous droits réservés.
+    </p>
   </footer>
 
   <script src="script.js"></script>
 
   <script>
-    const iaForm = document.getElementById("ia-form");
-    const iaQuestion = document.getElementById("ia-question");
-    const iaMessages = document.getElementById("ia-messages");
-    const iaSend = document.getElementById("ia-send");
+    const adresseIA =
+      "https://drbck-tech-it-pro.onrender.com/api/chat";
 
-    const adresseIA = "https://drbck-tech-it-pro.onrender.com/api/chat";
+    const formulaireIA = document.getElementById("ia-form");
+    const champIA = document.getElementById("ia-question");
+    const messagesIA = document.getElementById("ia-messages");
+    const boutonIA = document.getElementById("ia-send");
 
-    function ajouterMessage(texte, classe) {
+    function ajouterMessage(texte, type) {
       const message = document.createElement("div");
-      message.className = "ia-message " + classe;
+
+      message.className = "ia-message " +
+        (type === "user" ? "ia-user" : "ia-bot");
+
       message.textContent = texte;
-      iaMessages.appendChild(message);
-      iaMessages.scrollTop = iaMessages.scrollHeight;
+
+      messagesIA.appendChild(message);
+      messagesIA.scrollTop = messagesIA.scrollHeight;
     }
 
-    iaForm.addEventListener("submit", async function(e) {
-      e.preventDefault();
+    formulaireIA.addEventListener("submit", async function(event) {
+      event.preventDefault();
 
-      const question = iaQuestion.value.trim();
+      const question = champIA.value.trim();
 
       if (!question) return;
 
-      ajouterMessage(question, "ia-user");
-      iaQuestion.value = "";
-      iaSend.disabled = true;
-      iaSend.textContent = "Envoi...";
+      ajouterMessage(question, "user");
+
+      champIA.value = "";
+      boutonIA.disabled = true;
+      boutonIA.textContent = "Patientez...";
 
       try {
-        const reponse = await fetch(adresseIA, {
+        const response = await fetch(adresseIA, {
           method: "POST",
+
           headers: {
             "Content-Type": "application/json"
           },
+
           body: JSON.stringify({
             message: question
           })
         });
 
-        const resultat = await reponse.json();
+        const resultat = await response.json();
 
-        if (!reponse.ok) {
+        if (!response.ok) {
           throw new Error(resultat.error || "Erreur du serveur.");
         }
 
-        const texteIA =
-          resultat.reply ||
-          resultat.output_text ||
-          resultat.message;
-
-        if (typeof texteIA !== "string" || !texteIA.trim()) {
-          throw new Error("Réponse IA introuvable.");
-        }
-
-        ajouterMessage(texteIA, "ia-bot");
-
-      } catch (erreur) {
         ajouterMessage(
-          "Désolé, le service IA ne répond pas pour le moment. Réessayez plus tard.",
-          "ia-bot"
+          resultat.reply || "Aucune réponse reçue.",
+          "bot"
         );
-      }
 
-      iaSend.disabled = false;
-      iaSend.textContent = "Envoyer";
-      iaQuestion.focus();
+      } catch (error) {
+        ajouterMessage(
+          "Désolé, l'assistant est momentanément indisponible. Réessayez plus tard.",
+          "bot"
+        );
+
+      } finally {
+        boutonIA.disabled = false;
+        boutonIA.textContent = "Envoyer";
+        champIA.focus();
+      }
     });
   </script>
 
