@@ -1,7 +1,9 @@
+```javascript
 const http = require("http");
 const crypto = require("crypto");
 
 const SITE = "https://drbck-tech-it-pro.github.io";
+
 const requests = new Map();
 const sessions = new Map();
 
@@ -103,7 +105,31 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
     const path = url.pathname;
 
+    // =====================================
+    // SERVICES PUBLICS : RÉCUPÉRATION SUPABASE
+    // =====================================
+
+    if (path === "/api/services" && req.method === "GET") {
+      const response = await supabaseRequest(
+        "services?select=id,nom,description,prix,photo_url,actif,created_at&actif=eq.true&order=id.asc"
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error("Erreur Supabase :", result);
+
+        return send(500, {
+          error: "Impossible de récupérer les services."
+        });
+      }
+
+      return send(200, result);
+    }
+
+    // =====================================
     // CONNEXION ADMINISTRATEUR
+    // =====================================
 
     if (path === "/api/admin/login" && req.method === "POST") {
       const data = await readBody();
@@ -136,7 +162,9 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // =====================================
     // PROTECTION DES FONCTIONS ADMIN
+    // =====================================
 
     if (path.startsWith("/api/admin/")) {
       if (!checkAdmin()) {
@@ -145,7 +173,7 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      // AFFICHER LES SERVICES
+      // AFFICHER TOUS LES SERVICES
 
       if (
         path === "/api/admin/services" &&
@@ -207,6 +235,8 @@ const server = http.createServer(async (req, res) => {
         const result = await response.json();
 
         if (!response.ok) {
+          console.error("Erreur ajout :", result);
+
           return send(500, {
             error: "Impossible d'ajouter le service."
           });
@@ -227,6 +257,8 @@ const server = http.createServer(async (req, res) => {
       if (match) {
         const id = match[1];
 
+        // MODIFIER
+
         if (req.method === "PATCH") {
           const data = await readBody();
           const modifications = {};
@@ -245,7 +277,7 @@ const server = http.createServer(async (req, res) => {
 
           if (
             modifications.nom !== undefined &&
-            (!String(modifications.nom).trim())
+            !String(modifications.nom).trim()
           ) {
             return send(400, {
               error: "Le nom est obligatoire."
@@ -254,7 +286,7 @@ const server = http.createServer(async (req, res) => {
 
           if (
             modifications.prix !== undefined &&
-            (!String(modifications.prix).trim())
+            !String(modifications.prix).trim()
           ) {
             return send(400, {
               error: "Le prix est obligatoire."
@@ -292,6 +324,8 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
+        // SUPPRIMER
+
         if (req.method === "DELETE") {
           const response = await supabaseRequest(
             "services?id=eq." + id,
@@ -321,7 +355,9 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // =====================================
     // ASSISTANT PUBLIC DRBCK TECH IA
+    // =====================================
 
     if (req.method !== "POST" || path !== "/api/chat") {
       return send(404, {
@@ -363,25 +399,17 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // RÉCUPÉRATION DES SERVICES SUPABASE
+    // RÉCUPÉRATION DES SERVICES DEPUIS SUPABASE
 
-    const config = getSupabaseConfig();
-
-    const servicesResponse = await fetch(
-      config.url +
-      "/rest/v1/services?select=nom,description,prix&actif=eq.true&order=nom.asc",
-      {
-        headers: {
-          "apikey": process.env.SUPABASE_PUBLISHABLE_KEY
-        }
-      }
+    const servicesResponse = await supabaseRequest(
+      "services?select=nom,description,prix&actif=eq.true&order=nom.asc"
     );
+
+    const services = await servicesResponse.json();
 
     if (!servicesResponse.ok) {
       throw new Error("Impossible de lire les services.");
     }
-
-    const services = await servicesResponse.json();
 
     const listeServices = services.length
       ? services.map(service =>
@@ -435,6 +463,8 @@ de contacter l'entreprise pour confirmation.
     const result = await response.json();
 
     if (!response.ok) {
+      console.error("Erreur OpenAI :", result);
+
       throw new Error("Erreur API OpenAI");
     }
 
