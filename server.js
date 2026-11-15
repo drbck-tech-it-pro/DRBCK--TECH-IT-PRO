@@ -106,10 +106,14 @@ const server = http.createServer(async (req, res) => {
     const path = url.pathname;
 
     // =====================================
-    // SERVICES PUBLICS : RÉCUPÉRATION SUPABASE
+    // SERVICES PUBLICS
+    // RÉCUPÉRATION DEPUIS SUPABASE
     // =====================================
 
-    if (path === "/api/services" && req.method === "GET") {
+    if (
+      path === "/api/services" &&
+      req.method === "GET"
+    ) {
       const response = await supabaseRequest(
         "services?select=id,nom,description,prix,photo_url,actif,created_at&actif=eq.true&order=id.asc"
       );
@@ -131,7 +135,10 @@ const server = http.createServer(async (req, res) => {
     // CONNEXION ADMINISTRATEUR
     // =====================================
 
-    if (path === "/api/admin/login" && req.method === "POST") {
+    if (
+      path === "/api/admin/login" &&
+      req.method === "POST"
+    ) {
       const data = await readBody();
       const password = process.env.ADMIN_PASSWORD;
 
@@ -173,7 +180,7 @@ const server = http.createServer(async (req, res) => {
         });
       }
 
-      // AFFICHER TOUS LES SERVICES
+      // AFFICHER LES SERVICES
 
       if (
         path === "/api/admin/services" &&
@@ -257,7 +264,7 @@ const server = http.createServer(async (req, res) => {
       if (match) {
         const id = match[1];
 
-        // MODIFIER
+        // MODIFIER UN SERVICE
 
         if (req.method === "PATCH") {
           const data = await readBody();
@@ -324,7 +331,7 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
-        // SUPPRIMER
+        // SUPPRIMER UN SERVICE
 
         if (req.method === "DELETE") {
           const response = await supabaseRequest(
@@ -359,7 +366,10 @@ const server = http.createServer(async (req, res) => {
     // ASSISTANT PUBLIC DRBCK TECH IA
     // =====================================
 
-    if (req.method !== "POST" || path !== "/api/chat") {
+    if (
+      req.method !== "POST" ||
+      path !== "/api/chat"
+    ) {
       return send(404, {
         error: "Page introuvable."
       });
@@ -399,7 +409,7 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // RÉCUPÉRATION DES SERVICES DEPUIS SUPABASE
+    // RÉCUPÉRATION DES SERVICES SUPABASE POUR L'IA
 
     const servicesResponse = await supabaseRequest(
       "services?select=nom,description,prix&actif=eq.true&order=nom.asc"
@@ -419,6 +429,9 @@ const server = http.createServer(async (req, res) => {
           " | Prix : " + service.prix
         ).join("\n")
       : "Aucun service actif enregistré.";
+
+    // INSTRUCTIONS DE DRBCK TECH IA
+    // IMPORTANT : LE TEXTE EST ENTRE DEUX ACCENTS GRAVES
 
     const INSTRUCTIONS = `
 Tu es DRBCK TECH IA, l'assistant officiel de DRBCK TECH.IT.PRO,
@@ -442,6 +455,8 @@ vers WhatsApp au +243 972 052 103.
 - Si un service n'est pas dans la liste, demande au client
 de contacter l'entreprise pour confirmation.
 `;
+
+    // CONNEXION OPENAI
 
     const response = await fetch(
       "https://api.openai.com/v1/responses",
