@@ -1,6 +1,9 @@
-```javascript
 const http = require("http");
 const crypto = require("crypto");
+
+// =====================================
+// CONFIGURATION
+// =====================================
 
 const SITE = "https://drbck-tech-it-pro.github.io";
 
@@ -27,16 +30,10 @@ const server = http.createServer(async (req, res) => {
     "Content-Type, Authorization"
   );
 
+  // Autoriser les requêtes OPTIONS du navigateur
   if (req.method === "OPTIONS") {
     res.writeHead(204);
     return res.end();
-  }
-
-  if (origin !== SITE) {
-    res.writeHead(403);
-    return res.end(JSON.stringify({
-      error: "Accès refusé."
-    }));
   }
 
   function send(status, data) {
@@ -44,19 +41,35 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify(data));
   }
 
+  // Vérification de l'origine
+  if (origin !== SITE && !(req.method === "GET" && req.url === "/")) {
+    return send(403, {
+      error: "Accès refusé."
+    });
+  }
+
+  // Lecture des données envoyées
   async function readBody() {
     let body = "";
 
     for await (const chunk of req) {
       body += chunk;
 
-      if (body.length > 20000) {
-        throw new Error("Message trop long.");
+      if (body.length > 200000) {
+        throw new Error("Données trop volumineuses.");
       }
     }
 
-    return JSON.parse(body || "{}");
+    try {
+      return JSON.parse(body || "{}");
+    } catch {
+      throw new Error("Format JSON invalide.");
+    }
   }
+
+  // =====================================
+  // CONFIGURATION SUPABASE
+  // =====================================
 
   function getSupabaseConfig() {
     const url = process.env.SUPABASE_URL;
@@ -81,6 +94,7 @@ const server = http.createServer(async (req, res) => {
         ...options,
         headers: {
           "apikey": config.key,
+          "Authorization": "Bearer " + config.key,
           "Content-Type": "application/json",
           ...(options.headers || {})
         }
@@ -88,9 +102,14 @@ const server = http.createServer(async (req, res) => {
     );
   }
 
+  // =====================================
+  // VÉRIFICATION ADMINISTRATEUR
+  // =====================================
+
   function checkAdmin() {
     const authorization = req.headers.authorization || "";
     const token = authorization.replace(/^Bearer\s+/i, "");
+
     const session = sessions.get(token);
 
     if (!session || session.expires < Date.now()) {
@@ -101,9 +120,24 @@ const server = http.createServer(async (req, res) => {
     return true;
   }
 
+  // =====================================
+  // TRAITEMENT DES ROUTES
+  // =====================================
+
   try {
     const url = new URL(req.url, "http://localhost");
     const path = url.pathname;
+
+    // =====================================
+    // TEST DU SERVEUR
+    // =====================================
+
+    if (path === "/" && req.method === "GET") {
+      return send(200, {
+        success: true,
+        message: "Serveur DRBCK TECH.IT.PRO opérationnel."
+      });
+    }
 
     // =====================================
     // SERVICES PUBLICS
@@ -170,7 +204,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // =====================================
-    // PROTECTION DES FONCTIONS ADMIN
+    // ROUTES ADMINISTRATEUR PROTÉGÉES
     // =====================================
 
     if (path.startsWith("/api/admin/")) {
@@ -193,6 +227,8 @@ const server = http.createServer(async (req, res) => {
         const result = await response.json();
 
         if (!response.ok) {
+          console.error("Erreur lecture services :", result);
+
           return send(500, {
             error: "Impossible de lire les services."
           });
@@ -320,6 +356,8 @@ const server = http.createServer(async (req, res) => {
           const result = await response.json();
 
           if (!response.ok) {
+            console.error("Erreur modification :", result);
+
             return send(500, {
               error: "Impossible de modifier le service."
             });
@@ -345,6 +383,10 @@ const server = http.createServer(async (req, res) => {
           );
 
           if (!response.ok) {
+            const result = await response.json();
+
+            console.error("Erreur suppression :", result);
+
             return send(500, {
               error: "Impossible de supprimer le service."
             });
@@ -375,6 +417,8 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // LIMITATION DES MESSAGES
+
     const ip = req.socket.remoteAddress;
     const now = Date.now();
     const previous = requests.get(ip) || [];
@@ -391,6 +435,8 @@ const server = http.createServer(async (req, res) => {
 
     recent.push(now);
     requests.set(ip, recent);
+
+    // VÉRIFICATION OPENAI
 
     if (!process.env.OPENAI_API_KEY) {
       return send(500, {
@@ -409,7 +455,9 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // RÉCUPÉRATION DES SERVICES SUPABASE POUR L'IA
+    // =====================================
+    // RÉCUPÉRATION DES SERVICES SUPABASE
+    // =====================================
 
     const servicesResponse = await supabaseRequest(
       "services?select=nom,description,prix&actif=eq.true&order=nom.asc"
@@ -418,6 +466,8 @@ const server = http.createServer(async (req, res) => {
     const services = await servicesResponse.json();
 
     if (!servicesResponse.ok) {
+      console.error("Erreur services IA :", services);
+
       throw new Error("Impossible de lire les services.");
     }
 
@@ -430,8 +480,9 @@ const server = http.createServer(async (req, res) => {
         ).join("\n")
       : "Aucun service actif enregistré.";
 
+    // =====================================
     // INSTRUCTIONS DE DRBCK TECH IA
-    // IMPORTANT : LE TEXTE EST ENTRE DEUX ACCENTS GRAVES
+    // =====================================
 
     const INSTRUCTIONS = `
 Tu es DRBCK TECH IA, l'assistant officiel de DRBCK TECH.IT.PRO,
@@ -456,7 +507,9 @@ vers WhatsApp au +243 972 052 103.
 de contacter l'entreprise pour confirmation.
 `;
 
-    // CONNEXION OPENAI
+    // =====================================
+    // CONNEXION À OPENAI
+    // =====================================
 
     const response = await fetch(
       "https://api.openai.com/v1/responses",
@@ -483,6 +536,8 @@ de contacter l'entreprise pour confirmation.
       throw new Error("Erreur API OpenAI");
     }
 
+    // RÉCUPÉRATION DE LA RÉPONSE
+
     const texte = (result.output || [])
       .flatMap(item => item.content || [])
       .filter(item => item.type === "output_text")
@@ -490,7 +545,7 @@ de contacter l'entreprise pour confirmation.
       .join("\n");
 
     if (!texte.trim()) {
-      throw new Error("Réponse IA vide");
+      throw new Error("Réponse IA vide.");
     }
 
     return send(200, {
@@ -498,7 +553,7 @@ de contacter l'entreprise pour confirmation.
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Erreur serveur :", error);
 
     return send(500, {
       error: "Une erreur est survenue sur le serveur."
@@ -506,4 +561,12 @@ de contacter l'entreprise pour confirmation.
   }
 });
 
-server.listen(process.env.PORT || 3000);
+// =====================================
+// DÉMARRAGE DU SERVEUR
+// =====================================
+
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log("DRBCK TECH.IT.PRO fonctionne sur le port " + PORT);
+});
