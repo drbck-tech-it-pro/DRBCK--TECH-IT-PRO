@@ -19,7 +19,7 @@ body {
 }
 
 .container {
-  max-width: 700px;
+  max-width: 750px;
   margin: 20px auto;
 }
 
@@ -43,11 +43,20 @@ input, textarea, button {
   font-size: 16px;
 }
 
+textarea {
+  min-height: 90px;
+}
+
 button {
   background: #eab308;
   color: #111827;
   font-weight: bold;
   cursor: pointer;
+}
+
+.delete {
+  background: #dc2626;
+  color: white;
 }
 
 .service {
@@ -58,13 +67,15 @@ button {
   overflow-wrap: anywhere;
 }
 
-.service button {
-  margin-top: 8px;
-}
-
-.delete {
-  background: #dc2626;
-  color: white;
+.service img {
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 8px;
+  margin: 10px 0;
+  background: #0f172a;
 }
 
 #dashboard {
@@ -75,9 +86,13 @@ button {
   color: #facc15;
 }
 
-.whatsapp {
-  color: #facc15;
-  text-decoration: none;
+.logo {
+  display: block;
+  width: 85px;
+  height: 85px;
+  object-fit: contain;
+  margin: 0 auto 15px;
+  border-radius: 50%;
 }
 </style>
 </head>
@@ -86,9 +101,10 @@ button {
 <div class="container">
 
 <header>
+  <img src="logo.jpg" alt="Logo DRBCK" class="logo">
   <h1>DRBCK TECH.IT.PRO</h1>
   <p>Administration des services</p>
-  <p>WhatsApp : <a class="whatsapp" href="https://wa.me/243972052103">+243 972 052 103</a></p>
+  <p>Service rapide et fiable à Likasi</p>
 </header>
 
 <div class="box" id="loginBox">
@@ -115,11 +131,18 @@ button {
     <form id="serviceForm">
       <input id="nom" placeholder="Nom du service" required>
 
-      <textarea id="description" placeholder="Description du service"></textarea>
+      <textarea
+        id="description"
+        placeholder="Description du service"
+      ></textarea>
 
-      <input id="prix" placeholder="Prix du service" required>
+      <input id="prix" placeholder="Prix en dollars" required>
 
-      <input id="photo_url" placeholder="Lien de la photo (facultatif)">
+      <input
+        id="photo_url"
+        type="url"
+        placeholder="Lien de la photo (facultatif)"
+      >
 
       <button type="submit">AJOUTER LE SERVICE</button>
     </form>
@@ -132,13 +155,16 @@ button {
     <div id="servicesList">Chargement...</div>
   </div>
 
-  <button id="logoutButton" class="delete">SE DÉCONNECTER</button>
+  <button id="logoutButton" class="delete">
+    SE DÉCONNECTER
+  </button>
 
 </div>
 </div>
 
 <script>
 const API = "https://drbck-tech-it-pro.onrender.com";
+
 let token = sessionStorage.getItem("adminToken");
 
 function afficherDashboard() {
@@ -213,8 +239,24 @@ async function chargerServices() {
       const titre = document.createElement("h3");
       titre.textContent = service.nom;
 
+      bloc.appendChild(titre);
+
+      if (service.photo_url) {
+        const image = document.createElement("img");
+        image.src = service.photo_url;
+        image.alt = service.nom;
+        image.loading = "lazy";
+
+        image.onerror = function() {
+          this.style.display = "none";
+        };
+
+        bloc.appendChild(image);
+      }
+
       const description = document.createElement("p");
-      description.textContent = service.description || "Aucune description";
+      description.textContent =
+        service.description || "Aucune description";
 
       const prix = document.createElement("p");
       prix.textContent = "Prix : " + service.prix;
@@ -231,7 +273,14 @@ async function chargerServices() {
       supprimer.className = "delete";
       supprimer.onclick = () => supprimerService(service.id);
 
-      bloc.append(titre, description, prix, statut, modifier, supprimer);
+      bloc.append(
+        description,
+        prix,
+        statut,
+        modifier,
+        supprimer
+      );
+
       liste.appendChild(bloc);
     });
 
@@ -240,69 +289,96 @@ async function chargerServices() {
   }
 }
 
-document.getElementById("loginForm").addEventListener("submit", async event => {
-  event.preventDefault();
+document.getElementById("loginForm").addEventListener(
+  "submit",
+  async event => {
+    event.preventDefault();
 
-  const message = document.getElementById("message");
-  message.textContent = "Connexion en cours...";
+    const message = document.getElementById("message");
+    message.textContent = "Connexion en cours...";
 
-  try {
-    await connexion(document.getElementById("password").value);
-    afficherDashboard();
-  } catch (error) {
-    message.textContent = error.message;
+    try {
+      await connexion(
+        document.getElementById("password").value
+      );
+
+      afficherDashboard();
+
+    } catch (error) {
+      message.textContent = error.message;
+    }
   }
-});
+);
 
-document.getElementById("serviceForm").addEventListener("submit", async event => {
-  event.preventDefault();
+document.getElementById("serviceForm").addEventListener(
+  "submit",
+  async event => {
+    event.preventDefault();
 
-  const message = document.getElementById("serviceMessage");
-  message.textContent = "Ajout en cours...";
+    const message = document.getElementById("serviceMessage");
+    message.textContent = "Ajout en cours...";
 
-  try {
-    await requeteAdmin("/api/admin/services", {
-      method: "POST",
-      body: JSON.stringify({
-        nom: document.getElementById("nom").value,
-        description: document.getElementById("description").value,
-        prix: document.getElementById("prix").value,
-        photo_url: document.getElementById("photo_url").value || null,
-        actif: true
-      })
-    });
+    try {
+      await requeteAdmin("/api/admin/services", {
+        method: "POST",
+        body: JSON.stringify({
+          nom: document.getElementById("nom").value.trim(),
+          description: document.getElementById("description").value.trim(),
+          prix: document.getElementById("prix").value.trim(),
+          photo_url: document.getElementById("photo_url").value.trim() || null,
+          actif: true
+        })
+      });
 
-    document.getElementById("serviceForm").reset();
-    message.textContent = "Service ajouté avec succès.";
-    chargerServices();
+      document.getElementById("serviceForm").reset();
 
-  } catch (error) {
-    message.textContent = error.message;
+      message.textContent = "Service ajouté avec succès.";
+
+      chargerServices();
+
+    } catch (error) {
+      message.textContent = error.message;
+    }
   }
-});
+);
 
 async function modifierService(service) {
   const nom = prompt("Nom du service :", service.nom);
   if (nom === null) return;
 
-  const description = prompt("Description :", service.description || "");
+  const description = prompt(
+    "Description :",
+    service.description || ""
+  );
   if (description === null) return;
 
   const prix = prompt("Prix :", service.prix);
   if (prix === null) return;
 
-  const statut = confirm("Voulez-vous rendre ce service actif ?");
+  const photo_url = prompt(
+    "Lien de la photo :",
+    service.photo_url || ""
+  );
+  if (photo_url === null) return;
+
+  const statut = confirm(
+    "Voulez-vous rendre ce service actif ?"
+  );
 
   try {
-    await requeteAdmin("/api/admin/services/" + service.id, {
-      method: "PATCH",
-      body: JSON.stringify({
-        nom,
-        description,
-        prix,
-        actif: statut
-      })
-    });
+    await requeteAdmin(
+      "/api/admin/services/" + service.id,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          nom,
+          description,
+          prix,
+          photo_url: photo_url.trim() || null,
+          actif: statut
+        })
+      }
+    );
 
     alert("Service modifié avec succès.");
     chargerServices();
@@ -313,12 +389,17 @@ async function modifierService(service) {
 }
 
 async function supprimerService(id) {
-  if (!confirm("Voulez-vous vraiment supprimer ce service ?")) return;
+  if (!confirm("Voulez-vous vraiment supprimer ce service ?")) {
+    return;
+  }
 
   try {
-    await requeteAdmin("/api/admin/services/" + id, {
-      method: "DELETE"
-    });
+    await requeteAdmin(
+      "/api/admin/services/" + id,
+      {
+        method: "DELETE"
+      }
+    );
 
     alert("Service supprimé.");
     chargerServices();
@@ -331,12 +412,16 @@ async function supprimerService(id) {
 function deconnexion() {
   token = null;
   sessionStorage.removeItem("adminToken");
+
   document.getElementById("dashboard").style.display = "none";
   document.getElementById("loginBox").style.display = "block";
   document.getElementById("password").value = "";
 }
 
-document.getElementById("logoutButton").addEventListener("click", deconnexion);
+document.getElementById("logoutButton").addEventListener(
+  "click",
+  deconnexion
+);
 
 if (token) {
   afficherDashboard();
