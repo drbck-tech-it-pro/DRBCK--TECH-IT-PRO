@@ -3,49 +3,338 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Administration DRBCK TECH.IT.PRO</title>
 
-<link rel="stylesheet" href="admin.css">
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 15px;
+  font-family: Arial, sans-serif;
+  background: #0f172a;
+  color: white;
+}
+
+.container {
+  max-width: 700px;
+  margin: 20px auto;
+}
+
+header, .box {
+  background: #1e293b;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 18px;
+}
+
+h1, h2 {
+  color: #facc15;
+}
+
+input, textarea, button {
+  width: 100%;
+  padding: 12px;
+  margin: 7px 0;
+  border-radius: 7px;
+  border: none;
+  font-size: 16px;
+}
+
+button {
+  background: #eab308;
+  color: #111827;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.service {
+  background: #334155;
+  padding: 14px;
+  border-radius: 8px;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+
+.service button {
+  margin-top: 8px;
+}
+
+.delete {
+  background: #dc2626;
+  color: white;
+}
+
+#dashboard {
+  display: none;
+}
+
+#message {
+  color: #facc15;
+}
+</style>
 </head>
 
 <body>
+<div class="container">
 
-<div class="login-box">
+<header>
+  <h1>DRBCK TECH.IT.PRO</h1>
+  <p>Administration des services</p>
+</header>
 
-    <img src="logo.png" alt="Logo DRBCK" class="logo">
+<div class="box" id="loginBox">
+  <h2>Connexion administrateur</h2>
 
-    <h1>DRBCK TECH.IT.PRO</h1>
+  <form id="loginForm">
+    <input
+      type="password"
+      id="password"
+      placeholder="Mot de passe administrateur"
+      required
+    >
+    <button type="submit">SE CONNECTER</button>
+  </form>
 
-    <p>Espace administrateur sécurisé</p>
+  <p id="message"></p>
+</div>
 
-    <form id="loginForm">
+<div id="dashboard">
 
-        <input
-            type="password"
-            id="password"
-            placeholder="Mot de passe administrateur"
-            required
-        >
+  <div class="box">
+    <h2>Ajouter un service</h2>
 
-        <button type="submit">SE CONNECTER</button>
+    <form id="serviceForm">
+      <input id="nom" placeholder="Nom du service" required>
 
+      <textarea id="description" placeholder="Description du service"></textarea>
+
+      <input id="prix" placeholder="Prix du service" required>
+
+      <input id="photo_url" placeholder="Lien de la photo (facultatif)">
+
+      <button type="submit">AJOUTER LE SERVICE</button>
     </form>
 
-    <p id="message"></p>
+    <p id="serviceMessage"></p>
+  </div>
 
+  <div class="box">
+    <h2>Liste des services</h2>
+    <div id="servicesList">Chargement...</div>
+  </div>
+
+  <button id="logoutButton" class="delete">SE DÉCONNECTER</button>
+
+</div>
 </div>
 
 <script>
-document.getElementById("loginForm")
-.addEventListener("submit", function(event) {
+const API = "https://drbck-tech-it-pro.onrender.com";
+let token = sessionStorage.getItem("adminToken");
 
-    event.preventDefault();
+function afficherDashboard() {
+  document.getElementById("loginBox").style.display = "none";
+  document.getElementById("dashboard").style.display = "block";
+  chargerServices();
+}
 
-    document.getElementById("message").textContent =
-    "La vérification sécurisée doit être configurée sur le serveur.";
+async function connexion(motDePasse) {
+  const response = await fetch(API + "/api/admin/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      password: motDePasse
+    })
+  });
 
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Connexion impossible.");
+  }
+
+  token = data.token;
+  sessionStorage.setItem("adminToken", token);
+}
+
+async function requeteAdmin(url, options = {}) {
+  const response = await fetch(API + url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + token,
+      ...(options.headers || {})
+    }
+  });
+
+  const data = await response.json();
+
+  if (response.status === 401) {
+    deconnexion();
+    throw new Error("Session expirée. Reconnectez-vous.");
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || "Une erreur est survenue.");
+  }
+
+  return data;
+}
+
+async function chargerServices() {
+  const liste = document.getElementById("servicesList");
+  liste.textContent = "Chargement des services...";
+
+  try {
+    const services = await requeteAdmin("/api/admin/services");
+
+    liste.innerHTML = "";
+
+    if (!services.length) {
+      liste.textContent = "Aucun service enregistré.";
+      return;
+    }
+
+    services.forEach(service => {
+      const bloc = document.createElement("div");
+      bloc.className = "service";
+
+      const titre = document.createElement("h3");
+      titre.textContent = service.nom;
+
+      const description = document.createElement("p");
+      description.textContent = service.description || "Aucune description";
+
+      const prix = document.createElement("p");
+      prix.textContent = "Prix : " + service.prix;
+
+      const statut = document.createElement("p");
+      statut.textContent = service.actif ? "Actif" : "Inactif";
+
+      const modifier = document.createElement("button");
+      modifier.textContent = "MODIFIER";
+      modifier.onclick = () => modifierService(service);
+
+      const supprimer = document.createElement("button");
+      supprimer.textContent = "SUPPRIMER";
+      supprimer.className = "delete";
+      supprimer.onclick = () => supprimerService(service.id);
+
+      bloc.append(titre, description, prix, statut, modifier, supprimer);
+      liste.appendChild(bloc);
+    });
+
+  } catch (error) {
+    liste.textContent = error.message;
+  }
+}
+
+document.getElementById("loginForm").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const message = document.getElementById("message");
+  message.textContent = "Connexion en cours...";
+
+  try {
+    await connexion(document.getElementById("password").value);
+    afficherDashboard();
+  } catch (error) {
+    message.textContent = error.message;
+  }
 });
+
+document.getElementById("serviceForm").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const message = document.getElementById("serviceMessage");
+  message.textContent = "Ajout en cours...";
+
+  try {
+    await requeteAdmin("/api/admin/services", {
+      method: "POST",
+      body: JSON.stringify({
+        nom: document.getElementById("nom").value,
+        description: document.getElementById("description").value,
+        prix: document.getElementById("prix").value,
+        photo_url: document.getElementById("photo_url").value || null,
+        actif: true
+      })
+    });
+
+    document.getElementById("serviceForm").reset();
+    message.textContent = "Service ajouté avec succès.";
+    chargerServices();
+
+  } catch (error) {
+    message.textContent = error.message;
+  }
+});
+
+async function modifierService(service) {
+  const nom = prompt("Nom du service :", service.nom);
+  if (nom === null) return;
+
+  const description = prompt("Description :", service.description || "");
+  if (description === null) return;
+
+  const prix = prompt("Prix :", service.prix);
+  if (prix === null) return;
+
+  const statut = confirm("Voulez-vous rendre ce service actif ?");
+
+  try {
+    await requeteAdmin("/api/admin/services/" + service.id, {
+      method: "PATCH",
+      body: JSON.stringify({
+        nom,
+        description,
+        prix,
+        actif: statut
+      })
+    });
+
+    alert("Service modifié avec succès.");
+    chargerServices();
+
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function supprimerService(id) {
+  if (!confirm("Voulez-vous vraiment supprimer ce service ?")) return;
+
+  try {
+    await requeteAdmin("/api/admin/services/" + id, {
+      method: "DELETE"
+    });
+
+    alert("Service supprimé.");
+    chargerServices();
+
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function deconnexion() {
+  token = null;
+  sessionStorage.removeItem("adminToken");
+  document.getElementById("dashboard").style.display = "none";
+  document.getElementById("loginBox").style.display = "block";
+  document.getElementById("password").value = "";
+}
+
+document.getElementById("logoutButton").addEventListener("click", deconnexion);
+
+if (token) {
+  afficherDashboard();
+}
 </script>
 
 </body>
