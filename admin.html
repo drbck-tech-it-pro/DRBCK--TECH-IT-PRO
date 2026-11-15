@@ -71,8 +71,13 @@ button {
   display: none;
 }
 
-#message {
+#message, #serviceMessage {
   color: #facc15;
+}
+
+.whatsapp {
+  color: #facc15;
+  text-decoration: none;
 }
 </style>
 </head>
@@ -83,6 +88,7 @@ button {
 <header>
   <h1>DRBCK TECH.IT.PRO</h1>
   <p>Administration des services</p>
+  <p>WhatsApp : <a class="whatsapp" href="https://wa.me/243972052103">+243 972 052 103</a></p>
 </header>
 
 <div class="box" id="loginBox">
@@ -195,7 +201,7 @@ async function chargerServices() {
 
     liste.innerHTML = "";
 
-    if (!services.length) {
+    if (!Array.isArray(services) || services.length === 0) {
       liste.textContent = "Aucun service enregistré.";
       return;
     }
@@ -338,4 +344,4 @@ if (token) {
 </script>
 
 </body>
-</html>
+  </html>
