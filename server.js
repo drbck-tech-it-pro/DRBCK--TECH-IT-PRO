@@ -1,14 +1,30 @@
-```javascript
+"use strict";
+
 const http = require("http");
 const crypto = require("crypto");
 
 const PORT = process.env.PORT || 3000;
+
 const SITE_ORIGIN = "https://drbck-tech-it-pro.github.io";
+
+const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
+const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "";
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-6-astra";
 
 const sessions = new Map();
 const rateLimits = new Map();
 
-function json(res, status, data) {
+const SESSION_DURATION = 8 * 60 * 60 * 1000;
+const MAX_BODY_SIZE = 2 * 1024 * 1024;
+
+// --------------------------------------------------
+// REPONSES JSON
+// --------------------------------------------------
+
+function sendJSON(res, status, data) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store"
@@ -17,24 +33,58 @@ function json(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+// --------------------------------------------------
+// CORS
+// --------------------------------------------------
+
+function setCors(req, res) {
+  const origin = req.headers.origin;
+
+  if (origin === SITE_ORIGIN) {
+    res.setHeader("Access-Control-Allow-Origin", SITE_ORIGIN);
+    res.setHeader("Vary", "Origin");
+  }
+
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PATCH, DELETE, OPTIONS"
+  );
+
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization"
+  );
+
+  res.setHeader("Access-Control-Max-Age", "86400");
+}
+
+// --------------------------------------------------
+// LECTURE DU CORPS DE LA REQUETE
+// --------------------------------------------------
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = "";
+    let body = "";
 
-    req.on("data", chunk => {
-      raw += chunk;
+    req.on("data", (chunk) => {
+      body += chunk.toString();
 
-      if (raw.length > 200000) {
-        reject(new Error("Données trop volumineuses."));
+      if (body.length > MAX_BODY_SIZE) {
+        reject(new Error("Corps de requête trop volumineux."));
         req.destroy();
       }
     });
 
     req.on("end", () => {
+      if (!body) {
+        resolve({});
+        return;
+      }
+
       try {
-        resolve(JSON.parse(raw || "{}"));
-      } catch {
-        reject(new Error("Format JSON invalide."));
+        resolve(JSON.parse(body));
+      } catch (error) {
+        reject(new Error("JSON invalide."));
       }
     });
 
@@ -42,488 +92,706 @@ function readBody(req) {
   });
 }
 
-function supabaseConfig() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY;
+// --------------------------------------------------
+// SUPABASE REST
+// --------------------------------------------------
 
-  if (!url || !key) {
+async function supabaseRequest(path, options = {}) {
+  if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
     throw new Error("Configuration Supabase manquante.");
   }
 
+  const response = await fetch(
+    SUPABASE_URL + "/rest/v1/" + path,
+    {
+      method: options.method || "GET",
+
+      headers: {
+        "apikey": SUPABASE_SECRET_KEY,
+        "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
+        "Content-Type": "application/json",
+        "Prefer": options.prefer || "return=representation",
+        ...(options.headers || {})
+      },
+
+      body: options.body
+        ? JSON.stringify(options.body)
+        : undefined
+    }
+  );
+
+  const text = await response.text();
+
+  let data = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch (error) {
+    data = text;
+  }
+
+  if (!response.ok) {
+    console.error("Erreur Supabase :", response.status, data);
+
+    throw new Error(
+      (data && data.message) ||
+      (data && data.error_description) ||
+      "Erreur Supabase."
+    );
+  }
+
+  return data;
+}
+
+// --------------------------------------------------
+// AUTHENTIFICATION SUPABASE
+// --------------------------------------------------
+
+async function verifySupabaseUser(accessToken) {
+  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+    throw new Error("Configuration Supabase Auth manquante.");
+  }
+
+  const response = await fetch(
+    SUPABASE_URL + "/auth/v1/user",
+    {
+      method: "GET",
+      headers: {
+        "apikey": SUPABASE_PUBLISHABLE_KEY,
+        "Authorization": "Bearer " + accessToken
+      }
+    }
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return await response.json();
+}
+
+// --------------------------------------------------
+// VERIFICATION DU COMPTE ADMINISTRATEUR
+// --------------------------------------------------
+
+async function verifyAdmin(accessToken) {
+  const user = await verifySupabaseUser(accessToken);
+
+  if (!user || !user.id) {
+    return null;
+  }
+
+  const profiles = await supabaseRequest(
+    "admin_profiles?select=*&user_id=eq." +
+    encodeURIComponent(user.id) +
+    "&limit=1"
+  );
+
+  if (!Array.isArray(profiles) || profiles.length === 0) {
+    return null;
+  }
+
+  const profile = profiles[0];
+
+  const allowedRoles = ["admin", "super_admin"];
+
+  if (!allowedRoles.includes(profile.role)) {
+    return null;
+  }
+
+  if (profile.active !== true) {
+    return null;
+  }
+
   return {
-    url: url.replace(/\/+$/, ""),
-    key
+    user: user,
+    profile: profile
   };
 }
 
-async function supabase(path, options = {}) {
-  const { url, key } = supabaseConfig();
+// --------------------------------------------------
+// RECUPERATION DU TOKEN ADMIN
+// --------------------------------------------------
 
-  return fetch(`${url}/rest/v1/${path}`, {
-    ...options,
+function getBearerToken(req) {
+  const header = req.headers.authorization || "";
 
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    }
-  });
-}
-
-function isAdmin(req) {
-  const token = (req.headers.authorization || "")
-    .replace(/^Bearer\s+/i, "");
-
-  const session = sessions.get(token);
-
-  if (!session || session.expiresAt < Date.now()) {
-    sessions.delete(token);
-    return false;
+  if (!header.startsWith("Bearer ")) {
+    return null;
   }
 
-  return true;
+  return header.substring(7).trim();
 }
 
-function publicServiceFilter() {
-  return "services?select=id,nom,description,prix,photo_url,actif,publication_status,created_at&actif=eq.true&publication_status=eq.published&order=id.asc";
+// --------------------------------------------------
+// LIMITATION DES REQUETES
+// --------------------------------------------------
+
+function checkRateLimit(key, maxRequests, windowMs) {
+  const now = Date.now();
+
+  let record = rateLimits.get(key);
+
+  if (!record || now > record.resetAt) {
+    record = {
+      count: 0,
+      resetAt: now + windowMs
+    };
+  }
+
+  record.count += 1;
+  rateLimits.set(key, record);
+
+  return record.count <= maxRequests;
 }
+
+// --------------------------------------------------
+// RECUPERATION DES SERVICES PUBLIES
+// --------------------------------------------------
+
+async function getPublicServices() {
+  return await supabaseRequest(
+    "services?select=id,nom,description,prix,photo_url,actif,publication_status,created_at&actif=eq.true&publication_status=eq.published&order=created_at.desc"
+  );
+}
+
+// --------------------------------------------------
+// INSTRUCTIONS DE DRBCK TECH IA
+// --------------------------------------------------
+
+function buildAIInstructions(services) {
+  const serviceList = JSON.stringify(services || []);
+
+  return [
+    "Tu es DRBCK TECH IA.",
+    "Tu es l'assistant officiel de DRBCK TECH.IT.PRO.",
+    "L'entreprise est située à Likasi, en République démocratique du Congo.",
+    "Réponds toujours en français.",
+    "Sois poli, simple, professionnel et précis.",
+    "Ne dis jamais que tu es ChatGPT.",
+    "Ne prétends jamais être un humain.",
+    "Présente les services et les prix uniquement à partir de la liste fournie.",
+    "N'invente jamais un prix.",
+    "Si un prix n'est pas disponible, dis au client de contacter l'entreprise.",
+    "Pour contacter l'entreprise sur WhatsApp : +243 972 052 103.",
+    "Voici les services actuellement publiés dans la base de données :",
+    serviceList
+  ].join("\n");
+}
+
+// --------------------------------------------------
+// EXTRACTION DE LA REPONSE OPENAI
+// --------------------------------------------------
+
+function extractOpenAIText(data) {
+  if (data && typeof data.output_text === "string") {
+    return data.output_text;
+  }
+
+  let result = "";
+
+  if (data && Array.isArray(data.output)) {
+    for (const item of data.output) {
+      if (!Array.isArray(item.content)) {
+        continue;
+      }
+
+      for (const part of item.content) {
+        if (
+          part.type === "output_text" &&
+          typeof part.text === "string"
+        ) {
+          result += part.text;
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+// --------------------------------------------------
+// SERVEUR HTTP
+// --------------------------------------------------
 
 const server = http.createServer(async (req, res) => {
-  const origin = req.headers.origin;
-
-  res.setHeader("Vary", "Origin");
-
-  if (origin === SITE_ORIGIN) {
-    res.setHeader("Access-Control-Allow-Origin", SITE_ORIGIN);
-
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PATCH, DELETE, OPTIONS"
-    );
-
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization"
-    );
-  }
+  setCors(req, res);
 
   if (req.method === "OPTIONS") {
-    if (origin !== SITE_ORIGIN) {
-      return json(res, 403, {
-        error: "Origine non autorisée."
-      });
-    }
-
     res.writeHead(204);
-    return res.end();
+    res.end();
+    return;
   }
 
-  if (origin && origin !== SITE_ORIGIN) {
-    return json(res, 403, {
-      error: "Accès refusé."
-    });
-  }
+  const url = new URL(
+    req.url,
+    "http://localhost:" + PORT
+  );
 
-  const url = new URL(req.url, "http://localhost");
-  const path = url.pathname;
+  const pathname = url.pathname;
 
   try {
 
-    // 1. SERVEUR
-    if (req.method === "GET" && path === "/") {
-      return json(res, 200, {
+    // ----------------------------------------------
+    // PAGE DE VERIFICATION DU SERVEUR
+    // ----------------------------------------------
+
+    if (req.method === "GET" && pathname === "/") {
+      sendJSON(res, 200, {
         success: true,
         message: "Serveur DRBCK TECH.IT.PRO opérationnel."
       });
+
+      return;
     }
 
-    // 2. SERVICES PUBLICS
-    if (req.method === "GET" && path === "/api/services") {
-      const response = await supabase(publicServiceFilter());
-      const data = await response.json();
+    // ----------------------------------------------
+    // SERVICES PUBLICS
+    // ----------------------------------------------
 
-      if (!response.ok) {
-        console.error(data);
+    if (
+      req.method === "GET" &&
+      pathname === "/api/services"
+    ) {
+      const services = await getPublicServices();
 
-        return json(res, 502, {
-          error: "Impossible de récupérer les services."
-        });
-      }
-
-      return json(res, 200, data);
-    }
-
-    // 3. CONNEXION ADMINISTRATEUR
-    if (req.method === "POST" && path === "/api/admin/login") {
-      const data = await readBody(req);
-      const password = process.env.ADMIN_PASSWORD;
-
-      if (!password) {
-        return json(res, 500, {
-          error: "ADMIN_PASSWORD non configuré sur Render."
-        });
-      }
-
-      if (
-        typeof data.password !== "string" ||
-        data.password !== password
-      ) {
-        return json(res, 401, {
-          error: "Mot de passe incorrect."
-        });
-      }
-
-      const token = crypto.randomBytes(32).toString("hex");
-
-      sessions.set(token, {
-        expiresAt: Date.now() + 8 * 60 * 60 * 1000
-      });
-
-      return json(res, 200, {
+      sendJSON(res, 200, {
         success: true,
-        token
+        services: services
       });
+
+      return;
     }
 
-    // 4. ADMINISTRATION
-    if (path.startsWith("/api/admin/")) {
+    // ----------------------------------------------
+    // CONNEXION ADMINISTRATEUR SUPABASE
+    // ----------------------------------------------
 
-      if (!isAdmin(req)) {
-        return json(res, 401, {
-          error: "Connexion administrateur requise."
+    if (
+      req.method === "POST" &&
+      pathname === "/api/admin/login"
+    ) {
+      const body = await readBody(req);
+
+      if (!body.email || !body.password) {
+        sendJSON(res, 400, {
+          success: false,
+          message: "Adresse e-mail et mot de passe obligatoires."
         });
+
+        return;
       }
 
-      // LIRE LES SERVICES
-      if (
-        path === "/api/admin/services" &&
-        req.method === "GET"
-      ) {
-        const response = await supabase(
-          "services?select=*&order=id.asc"
-        );
+      if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+        sendJSON(res, 500, {
+          success: false,
+          message: "Configuration Supabase Auth manquante."
+        });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          console.error(data);
-
-          return json(res, 502, {
-            error: "Impossible de lire les services."
-          });
-        }
-
-        return json(res, 200, data);
+        return;
       }
 
-      // AJOUTER UN SERVICE
-      if (
-        path === "/api/admin/services" &&
-        req.method === "POST"
-      ) {
-        const data = await readBody(req);
-
-        if (
-          typeof data.nom !== "string" ||
-          !data.nom.trim() ||
-          data.prix === undefined ||
-          String(data.prix).trim() === ""
-        ) {
-          return json(res, 400, {
-            error: "Le nom et le prix sont obligatoires."
-          });
-        }
-
-        const row = {
-          nom: data.nom.trim(),
-
-          description:
-            typeof data.description === "string"
-              ? data.description.trim()
-              : "",
-
-          prix: String(data.prix).trim(),
-
-          photo_url: data.photo_url || null,
-
-          actif: data.actif !== false,
-
-          publication_status:
-            [
-              "draft",
-              "pending",
-              "approved",
-              "published",
-              "rejected"
-            ].includes(data.publication_status)
-              ? data.publication_status
-              : "published"
-        };
-
-        const response = await supabase("services", {
+      const response = await fetch(
+        SUPABASE_URL + "/auth/v1/token?grant_type=password",
+        {
           method: "POST",
 
           headers: {
-            Prefer: "return=representation"
+            "apikey": SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json"
           },
 
-          body: JSON.stringify(row)
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          console.error(result);
-
-          return json(res, 502, {
-            error: "Ajout du service impossible."
-          });
+          body: JSON.stringify({
+            email: body.email,
+            password: body.password
+          })
         }
-
-        return json(res, 201, {
-          success: true,
-          service: result[0]
-        });
-      }
-
-      const match = path.match(
-        /^\/api\/admin\/services\/(\d+)$/
       );
 
-      // MODIFIER UN SERVICE
-      if (match && req.method === "PATCH") {
-        const data = await readBody(req);
-        const changes = {};
+      const authData = await response.json();
 
-        for (const key of [
-          "nom",
-          "description",
-          "prix",
-          "photo_url",
-          "actif",
-          "publication_status"
-        ]) {
-          if (data[key] !== undefined) {
-            changes[key] = data[key];
-          }
-        }
-
-        if (
-          changes.nom !== undefined &&
-          !String(changes.nom).trim()
-        ) {
-          return json(res, 400, {
-            error: "Le nom est obligatoire."
-          });
-        }
-
-        if (
-          changes.prix !== undefined &&
-          !String(changes.prix).trim()
-        ) {
-          return json(res, 400, {
-            error: "Le prix est obligatoire."
-          });
-        }
-
-        if (!Object.keys(changes).length) {
-          return json(res, 400, {
-            error: "Aucune modification fournie."
-          });
-        }
-
-        const response = await supabase(
-          `services?id=eq.${match[1]}`,
-          {
-            method: "PATCH",
-
-            headers: {
-              Prefer: "return=representation"
-            },
-
-            body: JSON.stringify(changes)
-          }
-        );
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          console.error(result);
-
-          return json(res, 502, {
-            error: "Modification impossible."
-          });
-        }
-
-        return json(res, 200, {
-          success: true,
-          service: result[0] || null
+      if (!response.ok || !authData.access_token) {
+        sendJSON(res, 401, {
+          success: false,
+          message: "Identifiants incorrects."
         });
+
+        return;
       }
 
-      // SUPPRIMER UN SERVICE
-      if (match && req.method === "DELETE") {
-        const response = await supabase(
-          `services?id=eq.${match[1]}`,
-          {
-            method: "DELETE",
+      const admin = await verifyAdmin(authData.access_token);
 
-            headers: {
-              Prefer: "return=representation"
-            }
-          }
-        );
-
-        if (!response.ok) {
-          const result = await response.json();
-          console.error(result);
-
-          return json(res, 502, {
-            error: "Suppression impossible."
-          });
-        }
-
-        return json(res, 200, {
-          success: true
+      if (!admin) {
+        sendJSON(res, 403, {
+          success: false,
+          message: "Accès administrateur refusé."
         });
+
+        return;
       }
 
-      return json(res, 404, {
-        error: "Route administrateur introuvable."
+      sendJSON(res, 200, {
+        success: true,
+        message: "Connexion administrateur réussie.",
+        access_token: authData.access_token,
+        refresh_token: authData.refresh_token,
+        expires_in: authData.expires_in,
+        user: admin.user,
+        profile: admin.profile
       });
+
+      return;
     }
 
-    // 5. ASSISTANT DRBCK TECH IA
-    if (req.method === "POST" && path === "/api/chat") {
-      const ip = req.socket.remoteAddress || "unknown";
-      const now = Date.now();
+    // ----------------------------------------------
+    // VERIFICATION DE LA SESSION ADMIN
+    // ----------------------------------------------
 
-      const recent = (rateLimits.get(ip) || [])
-        .filter(t => now - t < 60000);
+    if (
+      req.method === "GET" &&
+      pathname === "/api/admin/me"
+    ) {
+      const token = getBearerToken(req);
 
-      if (recent.length >= 10) {
-        return json(res, 429, {
-          error: "Trop de messages. Réessayez dans une minute."
+      if (!token) {
+        sendJSON(res, 401, {
+          success: false,
+          message: "Authentification nécessaire."
         });
+
+        return;
       }
 
-      recent.push(now);
-      rateLimits.set(ip, recent);
+      const admin = await verifyAdmin(token);
 
-      if (!process.env.OPENAI_API_KEY) {
-        return json(res, 503, {
-          error: "Assistant IA non configuré."
+      if (!admin) {
+        sendJSON(res, 403, {
+          success: false,
+          message: "Session administrateur invalide."
         });
+
+        return;
       }
 
-      if (!process.env.OPENAI_MODEL) {
-        return json(res, 503, {
-          error: "OPENAI_MODEL non configuré."
+      sendJSON(res, 200, {
+        success: true,
+        user: admin.user,
+        profile: admin.profile
+      });
+
+      return;
+    }
+
+    // ----------------------------------------------
+    // VERIFICATION POUR LES AUTRES ROUTES ADMIN
+    // ----------------------------------------------
+
+    if (pathname.startsWith("/api/admin/")) {
+      const token = getBearerToken(req);
+
+      if (!token) {
+        sendJSON(res, 401, {
+          success: false,
+          message: "Authentification nécessaire."
         });
+
+        return;
       }
 
-      const data = await readBody(req);
+      const admin = await verifyAdmin(token);
+
+      if (!admin) {
+        sendJSON(res, 403, {
+          success: false,
+          message: "Accès administrateur refusé."
+        });
+
+        return;
+      }
+
+      // --------------------------------------------
+      // LISTE DES SERVICES POUR ADMIN
+      // --------------------------------------------
 
       if (
-        typeof data.message !== "string" ||
-        !data.message.trim()
+        req.method === "GET" &&
+        pathname === "/api/admin/services"
       ) {
-        return json(res, 400, {
-          error: "Message invalide."
+        const services = await supabaseRequest(
+          "services?select=*&order=created_at.desc"
+        );
+
+        sendJSON(res, 200, {
+          success: true,
+          services: services
         });
+
+        return;
       }
 
-      const serviceResponse = await supabase(
-        publicServiceFilter()
+      // --------------------------------------------
+      // AJOUTER UN SERVICE
+      // --------------------------------------------
+
+      if (
+        req.method === "POST" &&
+        pathname === "/api/admin/services"
+      ) {
+        const body = await readBody(req);
+
+        if (!body.nom || !body.description) {
+          sendJSON(res, 400, {
+            success: false,
+            message: "Le nom et la description sont obligatoires."
+          });
+
+          return;
+        }
+
+        const newService = {
+          nom: String(body.nom).trim(),
+          description: String(body.description).trim(),
+          prix: body.prix || null,
+          photo_url: body.photo_url || null,
+          actif: body.actif === true,
+          publication_status: body.publication_status || "draft"
+        };
+
+        const created = await supabaseRequest(
+          "services",
+          {
+            method: "POST",
+            body: newService
+          }
+        );
+
+        sendJSON(res, 201, {
+          success: true,
+          message: "Service ajouté.",
+          service: created
+        });
+
+        return;
+      }
+
+      // --------------------------------------------
+      // MODIFIER OU SUPPRIMER UN SERVICE
+      // --------------------------------------------
+
+      const serviceMatch = pathname.match(
+        /^\/api\/admin\/services\/([0-9]+)$/
       );
 
-      const services = await serviceResponse.json();
+      if (serviceMatch) {
+        const serviceId = serviceMatch[1];
 
-      if (!serviceResponse.ok) {
-        throw new Error(
-          "Impossible de lire les services publiés."
-        );
+        // ------------------------------------------
+        // MODIFIER UN SERVICE
+        // ------------------------------------------
+
+        if (req.method === "PATCH") {
+          const body = await readBody(req);
+
+          const allowedFields = [
+            "nom",
+            "description",
+            "prix",
+            "photo_url",
+            "actif",
+            "publication_status"
+          ];
+
+          const updates = {};
+
+          for (const field of allowedFields) {
+            if (Object.prototype.hasOwnProperty.call(body, field)) {
+              updates[field] = body[field];
+            }
+          }
+
+          if (Object.keys(updates).length === 0) {
+            sendJSON(res, 400, {
+              success: false,
+              message: "Aucune modification reçue."
+            });
+
+            return;
+          }
+
+          const updated = await supabaseRequest(
+            "services?id=eq." + encodeURIComponent(serviceId),
+            {
+              method: "PATCH",
+              body: updates
+            }
+          );
+
+          sendJSON(res, 200, {
+            success: true,
+            message: "Service modifié.",
+            service: updated
+          });
+
+          return;
+        }
+
+        // ------------------------------------------
+        // SUPPRIMER UN SERVICE
+        // ------------------------------------------
+
+        if (req.method === "DELETE") {
+          await supabaseRequest(
+            "services?id=eq." + encodeURIComponent(serviceId),
+            {
+              method: "DELETE",
+              prefer: "return=minimal"
+            }
+          );
+
+          sendJSON(res, 200, {
+            success: true,
+            message: "Service supprimé."
+          });
+
+          return;
+        }
       }
 
-      const serviceText = services.length
-        ? services.map(s =>
-            `- ${s.nom} : ${s.description || "Description non précisée"} | Prix : ${s.prix}`
-          ).join("\n")
-        : "Aucun service publié actuellement.";
+      sendJSON(res, 404, {
+        success: false,
+        message: "Route administrateur introuvable."
+      });
 
-      const instructions =
-        `Tu es DRBCK TECH IA, assistant officiel de DRBCK TECH.IT.PRO à Likasi, RDC.
-Tu réponds en français, poliment et simplement.
-Ne dis jamais que tu es ChatGPT ou un autre assistant.
-N'invente aucun service ni tarif.
-Utilise uniquement cette liste de services publiés :
-${serviceText}
-Pour les commandes, contacte WhatsApp +243 972 052 103.
-Si un prix ou un service manque, invite le client à demander confirmation à l'entreprise.`;
+      return;
+    }
 
-      const ai = await fetch(
+    // ----------------------------------------------
+    // ASSISTANT PUBLIC DRBCK TECH IA
+    // ----------------------------------------------
+
+    if (
+      req.method === "POST" &&
+      pathname === "/api/chat"
+    ) {
+      const clientIP =
+        req.headers["x-forwarded-for"] ||
+        req.socket.remoteAddress ||
+        "unknown";
+
+      if (!checkRateLimit(clientIP, 20, 60 * 1000)) {
+        sendJSON(res, 429, {
+          success: false,
+          message: "Trop de demandes. Réessayez dans une minute."
+        });
+
+        return;
+      }
+
+      const body = await readBody(req);
+
+      const message = String(
+        body.message || body.question || ""
+      ).trim();
+
+      if (!message) {
+        sendJSON(res, 400, {
+          success: false,
+          message: "Veuillez écrire votre question."
+        });
+
+        return;
+      }
+
+      if (!OPENAI_API_KEY) {
+        sendJSON(res, 500, {
+          success: false,
+          message: "Le service IA n'est pas configuré."
+        });
+
+        return;
+      }
+
+      const services = await getPublicServices();
+
+      const instructions = buildAIInstructions(services);
+
+      const openAIResponse = await fetch(
         "https://api.openai.com/v1/responses",
         {
           method: "POST",
 
           headers: {
-            "Content-Type": "application/json",
-
-            Authorization:
-              `Bearer ${process.env.OPENAI_API_KEY}`
+            "Authorization": "Bearer " + OPENAI_API_KEY,
+            "Content-Type": "application/json"
           },
 
           body: JSON.stringify({
-            model: process.env.OPENAI_MODEL,
-            instructions,
-            input: data.message.trim()
+            model: OPENAI_MODEL,
+            instructions: instructions,
+            input: message
           })
         }
       );
 
-      const result = await ai.json();
+      const aiData = await openAIResponse.json();
 
-      if (!ai.ok) {
-        console.error(result);
+      if (!openAIResponse.ok) {
+        console.error("Erreur OpenAI :", aiData);
 
-        return json(res, 502, {
-          error: "L'assistant IA n'a pas pu répondre. Vérifiez OPENAI_MODEL et la clé API."
+        sendJSON(res, 502, {
+          success: false,
+          message: "L'assistant IA est momentanément indisponible."
         });
+
+        return;
       }
 
-      const reply = (result.output || [])
-        .flatMap(item => item.content || [])
-        .filter(item => item.type === "output_text")
-        .map(item => item.text)
-        .join("\n");
+      const answer = extractOpenAIText(aiData);
 
-      if (!reply.trim()) {
-        return json(res, 502, {
-          error: "Réponse IA vide."
+      if (!answer) {
+        sendJSON(res, 502, {
+          success: false,
+          message: "Aucune réponse reçue de l'assistant."
         });
+
+        return;
       }
 
-      return json(res, 200, {
-        reply
+      sendJSON(res, 200, {
+        success: true,
+        assistant: "DRBCK TECH IA",
+        reply: answer,
+        answer: answer
       });
+
+      return;
     }
 
-    return json(res, 404, {
-      error: "Route introuvable."
+    // ----------------------------------------------
+    // ROUTE INCONNUE
+    // ----------------------------------------------
+
+    sendJSON(res, 404, {
+      success: false,
+      message: "Route introuvable."
     });
 
   } catch (error) {
-    console.error("Erreur serveur:", error);
+    console.error("Erreur serveur :", error);
 
-    return json(res, 500, {
-      error: error.message || "Erreur serveur."
+    sendJSON(res, 500, {
+      success: false,
+      message: error.message || "Erreur interne du serveur."
     });
   }
 });
 
+// --------------------------------------------------
+// DEMARRAGE DU SERVEUR
+// --------------------------------------------------
+
 server.listen(PORT, () => {
   console.log(
-    `DRBCK TECH.IT.PRO démarré sur le port ${PORT}`
+    "DRBCK TECH.IT.PRO démarré sur le port " + PORT
   );
 });
