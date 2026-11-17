@@ -1,113 +1,108 @@
-// NUMERO WHATSAPP
-const numeroWhatsApp = "243XXXXXXXXX";
+// DRBCK TECH.IT.PRO — SERVICES PUBLICS
+const API_BASE = "https://drbck-tech-it-pro.onrender.com";
+const numeroWhatsApp = "243972052103";
 
-// SERVICES DRBCK TECH.IT.PRO
-const services = [
-  {
-    nom: "Déblocage de téléphone",
-    description: "Déblocage de téléphones Android et Apple, toutes marques.",
-    prix: "5 à 20 $",
-    photo: "https://images.unsplash.com/photo-1511709268805-4e9c2d4c3b7d?w=700"
-  },
-  {
-    nom: "Installation Windows",
-    description: "Installation et configuration de Windows.",
-    prix: "10 $",
-    photo: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=700"
-  },
-  {
-    nom: "Installation Microsoft Office",
-    description: "Installation des logiciels bureautiques.",
-    prix: "5 $",
-    photo: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=700"
-  },
-  {
-    nom: "Maintenance informatique",
-    description: "Entretien et dépannage des ordinateurs.",
-    prix: "10 $",
-    photo: "https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=700"
-  },
-  {
-    nom: "Réparation logicielle",
-    description: "Correction des problèmes logiciels.",
-    prix: "10 $",
-    photo: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=700"
-  },
-  {
-    nom: "Installation de logiciels",
-    description: "Installation des programmes nécessaires.",
-    prix: "5 $",
-    photo: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=700"
-  },
-  {
-    nom: "Suppression de virus",
-    description: "Nettoyage et protection de votre appareil.",
-    prix: "10 $",
-    photo: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=700"
-  },
-  {
-    nom: "Récupération de données",
-    description: "Récupération de fichiers lorsque c'est possible.",
-    prix: "À partir de 10 $",
-    photo: "https://images.unsplash.com/photo-1531492746076-161ca9bcad58?w=700"
-  },
-  {
-    nom: "Configuration de téléphone",
-    description: "Configuration et assistance pour votre téléphone.",
-    prix: "5 $",
-    photo: "https://images.unsplash.com/photo-1511709268805-4e9c2d4c3b7d?w=700"
-  },
-  {
-    nom: "Assistance informatique",
-    description: "Conseils et aide en informatique.",
-    prix: "5 $",
-    photo: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=700"
+function element(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text != null) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+
+function nettoyerUrlPhoto(value) {
+  if (!value || typeof value !== "string") return "";
+  const match = value.trim().match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+  const url = match ? match[2] : value.trim();
+  return /^https?:\/\//i.test(url) ? url : "";
+}
+
+async function chargerServicesPublics() {
+  const liste = document.getElementById("services-list");
+  if (!liste) return;
+
+  liste.replaceChildren(element("p", "Chargement des services..."));
+
+  try {
+    const response = await fetch(`${API_BASE}/api/services`, {
+      cache: "no-store"
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || "Erreur de chargement");
+    }
+
+    // Accepte le format { success: true, services: [...] }
+    // ainsi qu'un tableau direct.
+    const services = Array.isArray(data)
+      ? data
+      : Array.isArray(data.services) ? data.services : [];
+
+    liste.replaceChildren();
+
+    if (!services.length) {
+      liste.appendChild(element("p", "Aucun service publié pour le moment."));
+      return;
+    }
+
+    services
+      .filter(service =>
+        service &&
+        service.actif !== false &&
+        (!service.publication_status ||
+          service.publication_status === "published")
+      )
+      .forEach(service => {
+        const card = element("article", null, "service-card");
+        const photo = nettoyerUrlPhoto(service.photo_url);
+
+        if (photo) {
+          const img = element("img", null, "service-photo");
+          img.src = photo;
+          img.alt = service.nom || "Photo du service";
+          img.loading = "lazy";
+          img.onerror = () => img.remove();
+          card.appendChild(img);
+        }
+
+        card.appendChild(element("h3", service.nom || "Service"));
+        card.appendChild(element(
+          "p",
+          service.description || "Contactez-nous pour plus d'informations."
+        ));
+        card.appendChild(element(
+          "strong",
+          `Prix : ${service.prix || "Sur demande"}`
+        ));
+
+        const link = element("a", "Commander sur WhatsApp");
+        link.href = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(
+          "Bonjour DRBCK TECH.IT.PRO, je souhaite des informations sur : " +
+          (service.nom || "un service")
+        )}`;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+
+        card.appendChild(link);
+        liste.appendChild(card);
+      });
+
+  } catch (error) {
+    console.error("Erreur services DRBCK :", error);
+    liste.replaceChildren(element(
+      "p",
+      "Les services sont momentanément indisponibles. Contactez-nous sur WhatsApp au +243 972 052 103."
+    ));
   }
-];
-
-// AFFICHAGE DES SERVICES
-const liste = document.getElementById("services-list");
-
-if (liste) {
-  services.forEach(function(service) {
-    const carte = document.createElement("div");
-
-    carte.className = "service-card";
-
-    carte.innerHTML = `
-      <img
-        src="${service.photo}"
-        alt="${service.nom}"
-        class="service-photo"
-        loading="lazy"
-      >
-
-      <h3>${service.nom}</h3>
-
-      <p>${service.description}</p>
-
-      <strong>Prix : ${service.prix}</strong>
-
-      <br><br>
-
-      <a
-        href="https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(
-          "Bonjour DRBCK TECH.IT.PRO, je souhaite commander : " + service.nom
-        )}"
-        target="_blank"
-      >
-        Commander sur WhatsApp
-      </a>
-    `;
-
-    liste.appendChild(carte);
-  });
 }
 
-// BOUTON WHATSAPP PRINCIPAL
-const boutonWhatsApp = document.getElementById("whatsapp-link");
+const whatsappLink = document.getElementById("whatsapp-link");
 
-if (boutonWhatsApp) {
-  boutonWhatsApp.href = "https://wa.me/" + numeroWhatsApp;
-  boutonWhatsApp.target = "_blank";
+if (whatsappLink) {
+  whatsappLink.href = `https://wa.me/${numeroWhatsApp}`;
+  whatsappLink.target = "_blank";
+  whatsappLink.rel = "noopener noreferrer";
 }
+
+chargerServicesPublics();
