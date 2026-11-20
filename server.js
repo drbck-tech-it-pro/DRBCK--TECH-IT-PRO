@@ -539,10 +539,10 @@ const server = http.createServer(async (req, res) => {
       ) {
         const body = await readBody(req);
 
-        if (!body.nom || !body.description) {
+        if (!body.nom || !String(body.nom).trim()) {
           sendJSON(res, 400, {
             success: false,
-            message: "Le nom et la description sont obligatoires."
+            message: "Le nom du service est obligatoire."
           });
 
           return;
@@ -550,7 +550,7 @@ const server = http.createServer(async (req, res) => {
 
         const newService = {
           nom: String(body.nom).trim(),
-          description: String(body.description).trim(),
+          description: String(body.description || "").trim(),
           prix: body.prix || null,
           photo_url: body.photo_url || null,
           actif: body.actif === true,
