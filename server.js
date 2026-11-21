@@ -1117,6 +1117,54 @@ const server = http.createServer(async (req, res) => {
 
 
 
+      const mediaPublishMatch = pathname.match(new RegExp("^/api/admin/media/([0-9a-fA-F-]{36})/publish$"));
+      if (mediaPublishMatch && req.method === "POST") {
+        const mediaId = mediaPublishMatch[1];
+        const rows = await supabaseRequest("media_library?select=id,file_name,file_type,storage_path,source,status&id=eq." +
+          encodeURIComponent(mediaId) + "&limit=1");
+        if (!Array.isArray(rows) || !rows.length) {
+          sendJSON(res, 404, { success: false, message: "Fichier introuvable." }); return;
+        }
+        const media = rows[0];
+        if (media.source !== "ai" || media.status !== "draft" ||
+            !String(media.storage_path || "").startsWith("generated/")) {
+          sendJSON(res, 409, { success: false, message: "Seuls les médias IA en brouillon peuvent être publiés ici." }); return;
+        }
+        const sourcePath = String(media.storage_path);
+        const sourceResponse = await fetch(SUPABASE_URL + "/storage/v1/object/admin-media/" +
+          sourcePath.split("/").map(encodeURIComponent).join("/"), {
+            headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
+          });
+        if (!sourceResponse.ok) {
+          sendJSON(res, 502, { success: false, message: "Impossible de récupérer le fichier privé." }); return;
+        }
+        const fileBuffer = Buffer.from(await sourceResponse.arrayBuffer());
+        const publicPath = "ai/" + media.file_name;
+        const uploadResponse = await fetch(SUPABASE_URL + "/storage/v1/object/services-photos/" +
+          publicPath.split("/").map(encodeURIComponent).join("/"), {
+            method: "POST",
+            headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
+              "Content-Type": media.file_type || "image/png", "x-upsert": "false" },
+            body: fileBuffer
+          });
+        if (!uploadResponse.ok) {
+          console.error("Publication image impossible :", uploadResponse.status, await uploadResponse.text());
+          sendJSON(res, 502, { success: false, message: "Impossible de publier le fichier dans le stockage public." }); return;
+        }
+        const publicUrl = SUPABASE_URL + "/storage/v1/object/public/services-photos/" +
+          publicPath.split("/").map(encodeURIComponent).join("/");
+        const updated = await supabaseRequest("media_library?id=eq." + encodeURIComponent(mediaId), {
+          method: "PATCH", body: { storage_path: publicPath, public_url: publicUrl, status: "published" }
+        });
+        await fetch(SUPABASE_URL + "/storage/v1/object/admin-media/" +
+          sourcePath.split("/").map(encodeURIComponent).join("/"), {
+            method: "DELETE", headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
+          }).catch(() => {});
+        await writeAdminHistory(admin, "media.published", "media", mediaId, { public_url: publicUrl });
+        sendJSON(res, 200, { success: true, message: "Image publiée après validation manuelle.", media: Array.isArray(updated) ? updated[0] : updated });
+        return;
+      }
+
       // ASSISTANT IA ADMINISTRATEUR : DESCRIPTION DE PRODUIT OU SERVICE
       if (req.method === "POST" && pathname === "/api/admin/ai/description") {
         if (!checkRateLimit("admin-ai-description:" + admin.user.id, 10, 60 * 60 * 1000)) {
