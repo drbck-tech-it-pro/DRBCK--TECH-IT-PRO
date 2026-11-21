@@ -1092,6 +1092,62 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      const settingMatch = pathname.match(/^\/api\/admin\/settings\/([a-z_]{2,40})$/);
+      if (settingMatch && req.method === "POST") {
+        const settingKey = settingMatch[1];
+        const fieldAllowlist = {
+          business_profile: ["name", "slogan", "city", "country", "description"],
+          contact: ["whatsapp", "public_email", "phone", "address"],
+          branding: ["logo_url", "primary_color", "secondary_color"],
+          delivery: ["methods", "instructions", "estimated_time"],
+          storefront: ["currency", "allow_website_orders", "allow_whatsapp_orders"],
+          notifications: ["email_enabled", "whatsapp_enabled"]
+        };
+        if (!fieldAllowlist[settingKey]) {
+          sendJSON(res, 404, { success: false, message: "Catégorie de réglage inconnue." }); return;
+        }
+        const body = await readBody(req);
+        const value = body.setting_value;
+        if (!value || typeof value !== "object" || Array.isArray(value) ||
+            JSON.stringify(value).length > 8000) {
+          sendJSON(res, 400, { success: false, message: "Les réglages doivent être un objet JSON valide de 8 Ko maximum." }); return;
+        }
+        const safeValue = {};
+        for (const field of fieldAllowlist[settingKey]) {
+          if (!Object.prototype.hasOwnProperty.call(value, field)) continue;
+          const item = value[field];
+          if (typeof item === "string") {
+            safeValue[field] = item.trim().slice(0, field === "description" || field === "instructions" ? 1500 : 300);
+          } else if (typeof item === "boolean") {
+            safeValue[field] = item;
+          } else if (Array.isArray(item)) {
+            safeValue[field] = item.filter(entry => typeof entry === "string").slice(0, 20)
+              .map(entry => entry.trim().slice(0, 120));
+          }
+        }
+        if (settingKey === "storefront" && safeValue.currency && safeValue.currency !== "USD") {
+          sendJSON(res, 400, { success: false, message: "La devise du site est fixée en dollars américains (USD)." }); return;
+        }
+        if (safeValue.logo_url && !/^https:\/\//i.test(safeValue.logo_url)) {
+          sendJSON(res, 400, { success: false, message: "L'adresse du logo doit commencer par https://." }); return;
+        }
+        if (safeValue.public_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeValue.public_email)) {
+          sendJSON(res, 400, { success: false, message: "Adresse e-mail publique invalide." }); return;
+        }
+        if (settingKey === "business_profile" && !safeValue.name) {
+          sendJSON(res, 400, { success: false, message: "Le nom de l'entreprise est obligatoire." }); return;
+        }
+        const saved = await supabaseRequest("site_settings?on_conflict=setting_key", {
+          method: "POST",
+          body: { setting_key: settingKey, setting_value: safeValue, updated_at: new Date().toISOString() },
+          prefer: "resolution=merge-duplicates,return=representation"
+        });
+        const row = Array.isArray(saved) ? saved[0] : saved;
+        await writeAdminHistory(admin, "setting.updated", "setting", settingKey, { fields: Object.keys(safeValue) });
+        sendJSON(res, 200, { success: true, message: "Réglages enregistrés.", setting: row });
+        return;
+      }
+
       const readOnlyModules = {
         "/api/admin/products": {
           table: "products",
