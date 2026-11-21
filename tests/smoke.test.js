@@ -90,3 +90,11 @@ test("public API CORS is restricted to the official GitHub Pages origin", () => 
   assert.match(server, /origin === SITE_ORIGIN/);
   assert.match(server, /https:\/\/drbck-tech-it-pro\.github\.io/);
 });
+
+test("manual payment verification is audited and synchronizes the order", () => {
+  assert.match(server, /\/api\/admin\/payments\/\(\[0-9a-fA-F-\]\{36\}\)\/verify/);
+  assert.match(server, /verification_note/);
+  assert.match(server, /payment_status: "confirmed"/);
+  assert.match(admin, /Confirmer après vérification/);
+  assert.match(admin, /Refuser après vérification/);
+});
