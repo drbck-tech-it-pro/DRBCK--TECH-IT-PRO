@@ -484,6 +484,34 @@ const server = http.createServer(async (req, res) => {
     }
 
 
+    // ANALYTICS PUBLICS SANS DONNEES PERSONNELLES
+    if (req.method === "POST" && pathname === "/api/events") {
+      const clientIP = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
+        req.socket.remoteAddress || "unknown";
+      if (!checkRateLimit("public-events:" + clientIP, 90, 60 * 1000)) {
+        sendJSON(res, 429, { success: false, message: "Trop d'événements envoyés." }); return;
+      }
+      const body = await readBody(req);
+      const eventType = String(body.event_type || "");
+      const allowedEvents = ["page_view", "service_view", "product_view", "whatsapp_click"];
+      if (!allowedEvents.includes(eventType)) {
+        sendJSON(res, 400, { success: false, message: "Type d'événement invalide." }); return;
+      }
+      const visitorId = String(body.visitor_id || "").trim().slice(0, 80);
+      const pagePath = String(body.page_path || "/").split("?")[0].slice(0, 200);
+      const productId = body.product_id == null || body.product_id === ""
+        ? null : String(body.product_id);
+      if (productId && !/^[0-9a-fA-F-]{36}$/.test(productId)) {
+        sendJSON(res, 400, { success: false, message: "Identifiant produit invalide." }); return;
+      }
+      await supabaseRequest("site_events", { method: "POST", body: {
+        visitor_id: visitorId || null, event_type: eventType,
+        page_path: pagePath.startsWith("/") ? pagePath : "/", product_id: productId
+      }, prefer: "return=minimal" });
+      sendJSON(res, 202, { success: true });
+      return;
+    }
+
     // ----------------------------------------------
     // COMMANDE PUBLIQUE DE PRODUIT (SANS COMPTE CLIENT)
     // ----------------------------------------------
@@ -901,10 +929,11 @@ const server = http.createServer(async (req, res) => {
           "orders?select=id,status,payment_status,total_amount&limit=1000",
           "payments?select=id,status,amount&limit=1000",
           "media_library?select=id&limit=1000",
-          "invoices?select=id&limit=1000"
+          "invoices?select=id&limit=1000",
+          "site_events?select=id,visitor_id,event_type&event_type=eq.page_view&limit=1000"
         ];
 
-        const [services, products, orders, payments, media, invoices] =
+        const [services, products, orders, payments, media, invoices, events] =
           await Promise.all(tables.map(path => supabaseRequest(path)));
 
         const safeArray = value => Array.isArray(value) ? value : [];
@@ -929,6 +958,8 @@ const server = http.createServer(async (req, res) => {
             confirmedAmount: sum(paymentRows.filter(row => row.status === "confirmed")),
             media: safeArray(media).length,
             invoices: safeArray(invoices).length,
+            siteVisits: safeArray(events).length,
+            uniqueVisitors: new Set(safeArray(events).map(row => row.visitor_id).filter(Boolean)).size,
             sampleLimited: true
           }
         });
