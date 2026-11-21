@@ -12,7 +12,7 @@ const publicScript = fs.readFileSync(path.join(root, "script.js"), "utf8");
 
 test("server and browser scripts parse", () => {
   assert.doesNotThrow(() => new Function(server));
-  const scripts = [...admin.matchAll(/<script[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+  const scripts = [...admin.matchAll(new RegExp("<script[^>]*>([\\s\\S]*?)</script>", "gi"))];
   assert.ok(scripts.length > 0, "admin.html must contain an inline script");
   for (const script of scripts) assert.doesNotThrow(() => new Function(script[1]));
   assert.doesNotThrow(() => new Function(publicScript));
