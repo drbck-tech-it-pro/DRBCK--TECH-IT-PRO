@@ -137,6 +137,7 @@ async function chargerProduitsPublics() {
 
     produits.forEach(produit => {
       const card = element("article", null, "service-card");
+      card.dataset.productId = String(produit.id || "");
 
       if (produit.image_url && /^https?:\/\//i.test(produit.image_url)) {
         const image = element("img", null, "service-photo");
@@ -340,3 +341,56 @@ async function chargerProduitsPublics() {
 
 chargerProduitsPublics();
 
+
+
+// ANALYTIQUES DU SITE : identifiant aléatoire limité à la session du navigateur.
+function drbckVisitorId() {
+  try {
+    let id = sessionStorage.getItem("drbck_visitor_id");
+    if (!id) {
+      id = window.crypto && typeof window.crypto.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : "v-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      sessionStorage.setItem("drbck_visitor_id", id);
+    }
+    return id;
+  } catch {
+    return "";
+  }
+}
+
+function drbckTrackEvent(eventType, productId) {
+  const payload = {
+    visitor_id: drbckVisitorId(),
+    event_type: eventType,
+    page_path: window.location.pathname,
+    product_id: productId || null
+  };
+  fetch(`${API_BASE}/api/events`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    keepalive: true
+  }).catch(() => {});
+}
+
+function drbckStartAnalytics() {
+  drbckTrackEvent("page_view");
+  document.addEventListener("click", event => {
+    const target = event.target;
+    if (!target || typeof target.closest !== "function") return;
+    const whatsapp = target.closest('a[href*="wa.me"]');
+    if (whatsapp) drbckTrackEvent("whatsapp_click");
+    const productCard = target.closest("#products-list .service-card");
+    if (productCard && productCard.dataset.productId && !productCard.dataset.viewTracked) {
+      productCard.dataset.viewTracked = "true";
+      drbckTrackEvent("product_view", productCard.dataset.productId);
+    }
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", drbckStartAnalytics, { once: true });
+} else {
+  drbckStartAnalytics();
+}
