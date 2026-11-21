@@ -523,8 +523,7 @@ const server = http.createServer(async (req, res) => {
     // COMMANDE PUBLIQUE DE PRODUIT (SANS COMPTE CLIENT)
     // ----------------------------------------------
     if (req.method === "POST" && pathname === "/api/orders") {
-      const clientIP = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
-        req.socket.remoteAddress || "unknown";
+      const clientIP = getClientIP(req);
       if (!checkRateLimit("public-order:" + clientIP, 6, 60 * 60 * 1000)) {
         sendJSON(res, 429, { success: false, message: "Trop de commandes envoyées. Réessayez plus tard." });
         return;
@@ -534,6 +533,7 @@ const server = http.createServer(async (req, res) => {
       const customerName = String(body.customer_name || "").trim().slice(0, 120);
       const customerPhone = String(body.customer_phone || "").trim().slice(0, 40);
       const customerEmail = String(body.customer_email || "").trim().slice(0, 180);
+      const deliveryAddress = String(body.delivery_address || "").trim().slice(0, 500);
       const quantity = Number(body.quantity);
       if (!/^[0-9a-fA-F-]{36}$/.test(productId) || !customerName || !customerPhone ||
           !Number.isInteger(quantity) || quantity < 1 || quantity > 50) {
@@ -552,6 +552,10 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const product = products[0];
+      if (product.product_type === "physical" && deliveryAddress.length < 5) {
+        sendJSON(res, 400, { success: false, message: "Adresse de livraison obligatoire pour un produit physique." });
+        return;
+      }
       if (product.stock !== null && product.stock !== undefined && Number(product.stock) < quantity) {
         sendJSON(res, 409, { success: false, message: "Stock insuffisant. Contactez-nous pour vérifier la disponibilité." });
         return;
@@ -594,8 +598,20 @@ const server = http.createServer(async (req, res) => {
           order_id: order.id, product_id: product.id, item_name: product.name,
           quantity, unit_price: unitPrice, total_price: total
         }});
+        if (product.product_type === "physical") {
+          await supabaseRequest("shipments", { method: "POST", body: {
+            order_id: order.id, delivery_address: deliveryAddress,
+            delivery_status: "pending", notes: "Livraison créée avec la commande client."
+          }});
+        }
       } catch (error) {
         if (order && order.id) {
+          await supabaseRequest("shipments?order_id=eq." + encodeURIComponent(order.id), {
+            method: "DELETE", prefer: "return=minimal"
+          }).catch(() => {});
+          await supabaseRequest("order_items?order_id=eq." + encodeURIComponent(order.id), {
+            method: "DELETE", prefer: "return=minimal"
+          }).catch(() => {});
           await supabaseRequest("orders?id=eq." + encodeURIComponent(order.id), {
             method: "DELETE", prefer: "return=minimal"
           }).catch(() => {});
@@ -637,8 +653,7 @@ const server = http.createServer(async (req, res) => {
     // ----------------------------------------------
     const paymentReferenceMatch = pathname.match(new RegExp("^/api/orders/([0-9a-fA-F-]{36})/payment-reference$"));
     if (req.method === "POST" && paymentReferenceMatch) {
-      const clientIP = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
-        req.socket.remoteAddress || "unknown";
+      const clientIP = getClientIP(req);
       if (!checkRateLimit("payment-reference:" + clientIP, 10, 60 * 60 * 1000)) {
         sendJSON(res, 429, { success: false, message: "Trop de tentatives. Réessayez plus tard." }); return;
       }
