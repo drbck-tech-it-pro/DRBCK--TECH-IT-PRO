@@ -131,6 +131,9 @@
         <button type="button" onclick="loadAdminModule('media')">Médiathèque</button>
         <button type="button" onclick="loadAdminModule('invoices')">Factures</button>
         <button type="button" onclick="loadAdminModule('history')">Historique</button>
+        <button type="button" onclick="loadAdminModule('shipments')">Livraisons</button>
+        <button type="button" onclick="loadAdminModule('paymentMethods')">Moyens de paiement</button>
+        <button type="button" onclick="loadAdminModule('events')">Activité du site</button>
       </div>
       <div id="moduleMessage" class="message"></div>
       <h3 id="moduleTitle">Sélectionne une rubrique</h3>
@@ -280,7 +283,10 @@ const adminModules = {
   customers: { title: "Clients (issus des commandes)", path: "/api/admin/customers", field: "customers" },
   media: { title: "Médiathèque", path: "/api/admin/media", field: "media" },
   invoices: { title: "Factures", path: "/api/admin/invoices", field: "invoices" },
-  history: { title: "Historique administratif", path: "/api/admin/history", field: "history" }
+  history: { title: "Historique administratif", path: "/api/admin/history", field: "history" },
+  shipments: { title: "Livraisons", path: "/api/admin/shipments", field: "shipments" },
+  paymentMethods: { title: "Moyens de paiement configurés", path: "/api/admin/payment-methods", field: "paymentMethods" },
+  events: { title: "Activité du site", path: "/api/admin/events", field: "events" }
 };
 
 async function loadAdminModule(name) {
