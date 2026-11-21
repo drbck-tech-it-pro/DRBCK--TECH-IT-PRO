@@ -111,3 +111,12 @@ test("rate limits use the proxy-provided client address instead of the first spo
   assert.match(server, /function getClientIP\(req\)/);
   assert.match(server, /forwarded\[forwarded\.length - 1\]/);
 });
+
+test("site settings can be edited by admins and safely applied to the public site", () => {
+  assert.match(server, /\/api\/admin\/settings/);
+  assert.match(server, /\/api\/site-settings/);
+  assert.match(server, /fieldAllowlist/);
+  assert.match(admin, /renderSettingsModule/);
+  assert.match(publicScript, /chargerParametresPublics/);
+  assert.match(publicScript, /business_profile/);
+});
