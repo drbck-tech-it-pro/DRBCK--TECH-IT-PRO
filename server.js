@@ -427,6 +427,21 @@ const server = http.createServer(async (req, res) => {
       if (!record.expires_at || new Date(record.expires_at).getTime() <= now.getTime()) {
         sendJSON(res, 410, { success: false, message: "Ce lien de téléchargement a expiré." }); return;
       }
+      const items = await supabaseRequest("order_items?select=id,order_id,product_id,item_name&id=eq." +
+        encodeURIComponent(record.order_item_id) + "&limit=1");
+      if (!Array.isArray(items) || !items.length || !items[0].product_id) {
+        sendJSON(res, 404, { success: false, message: "Fichier numérique introuvable." }); return;
+      }
+      const orders = await supabaseRequest("orders?select=id,payment_status&id=eq." +
+        encodeURIComponent(items[0].order_id) + "&limit=1");
+      if (!Array.isArray(orders) || !orders.length || orders[0].payment_status !== "confirmed") {
+        sendJSON(res, 403, { success: false, message: "Téléchargement bloqué : paiement non confirmé ou annulé." }); return;
+      }
+      const products = await supabaseRequest("products?select=id,name,product_type,file_path&id=eq." +
+        encodeURIComponent(items[0].product_id) + "&limit=1");
+      if (!Array.isArray(products) || !products.length || products[0].product_type !== "digital" || !products[0].file_path) {
+        sendJSON(res, 404, { success: false, message: "Fichier numérique indisponible." }); return;
+      }
       const maxDownloads = Number(record.max_downloads || 0);
       let claimed = false;
       for (let attempt = 0; attempt < 3 && !claimed; attempt++) {
@@ -448,16 +463,6 @@ const server = http.createServer(async (req, res) => {
       }
       if (!claimed) {
         sendJSON(res, 409, { success: false, message: "Lien déjà utilisé simultanément. Réessayez." }); return;
-      }
-      const items = await supabaseRequest("order_items?select=id,product_id,item_name&id=eq." +
-        encodeURIComponent(record.order_item_id) + "&limit=1");
-      if (!Array.isArray(items) || !items.length || !items[0].product_id) {
-        sendJSON(res, 404, { success: false, message: "Fichier numérique introuvable." }); return;
-      }
-      const products = await supabaseRequest("products?select=id,name,product_type,file_path&id=eq." +
-        encodeURIComponent(items[0].product_id) + "&limit=1");
-      if (!Array.isArray(products) || !products.length || products[0].product_type !== "digital" || !products[0].file_path) {
-        sendJSON(res, 404, { success: false, message: "Fichier numérique indisponible." }); return;
       }
       let storagePath = String(products[0].file_path);
       if (storagePath.startsWith("/")) storagePath = storagePath.slice(1);
