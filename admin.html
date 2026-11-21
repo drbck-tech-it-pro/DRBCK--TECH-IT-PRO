@@ -601,6 +601,9 @@ function renderMediaModule(rows, target) {
   target.replaceChildren();
   const heading = document.createElement("p");
   heading.textContent = "Génération d'images IA : les créations sont conservées en brouillon privé et ne sont jamais publiées automatiquement.";
+  const videoNote = document.createElement("p");
+  videoNote.textContent = "Génération vidéo non activée : l'API vidéo Sora d'OpenAI a été arrêtée. Un fournisseur vidéo compatible devra être connecté avant d'activer cette fonction.";
+
   const form = document.createElement("form");
   const prompt = document.createElement("textarea");
   prompt.placeholder = "Décrivez l'image professionnelle à créer...";
@@ -633,7 +636,7 @@ function renderMediaModule(rows, target) {
       button.disabled = false;
     }
   });
-  target.append(heading, form);
+  target.append(heading, videoNote, form);
   const listHeading = document.createElement("h4");
   listHeading.textContent = "Fichiers de la médiathèque";
   target.appendChild(listHeading);
