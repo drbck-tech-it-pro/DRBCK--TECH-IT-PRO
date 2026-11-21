@@ -120,3 +120,11 @@ test("site settings can be edited by admins and safely applied to the public sit
   assert.match(publicScript, /chargerParametresPublics/);
   assert.match(publicScript, /business_profile/);
 });
+
+test("physical orders require and create a delivery shipment", () => {
+  assert.match(server, /Adresse de livraison obligatoire pour un produit physique/);
+  assert.match(server, /product\.product_type === "physical"/);
+  assert.match(server, /delivery_address: deliveryAddress/);
+  assert.match(publicScript, /delivery_address: addressInput\.value\.trim\(\)/);
+  assert.match(publicScript, /addressInput\.required = produit\.product_type === "physical"/);
+});
