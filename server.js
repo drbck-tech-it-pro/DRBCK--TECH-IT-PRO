@@ -556,6 +556,113 @@ const server = http.createServer(async (req, res) => {
       }
 
       // --------------------------------------------
+      // LECTURE DES MODULES ADMIN (DONNEES REELLES)
+      // --------------------------------------------
+
+      const readOnlyModules = {
+        "/api/admin/products": {
+          table: "products",
+          select: "id,name,description,price,currency,product_type,image_url,stock,active,publication_status,created_at,updated_at",
+          order: "created_at.desc",
+          key: "products"
+        },
+        "/api/admin/orders": {
+          table: "orders",
+          select: "id,order_number,customer_name,customer_email,customer_phone,source,total_amount,currency,status,payment_status,delivery_status,created_at,updated_at",
+          order: "created_at.desc",
+          key: "orders"
+        },
+        "/api/admin/payments": {
+          table: "payments",
+          select: "id,order_id,method,transaction_reference,amount,currency,status,verified_at,created_at",
+          order: "created_at.desc",
+          key: "payments"
+        },
+        "/api/admin/media": {
+          table: "media_library",
+          select: "id,file_name,file_type,storage_path,public_url,source,status,created_at",
+          order: "created_at.desc",
+          key: "media"
+        },
+        "/api/admin/invoices": {
+          table: "invoices",
+          select: "id,order_id,invoice_number,customer_name,customer_email,amount,currency,pdf_path,status,created_at",
+          order: "created_at.desc",
+          key: "invoices"
+        },
+        "/api/admin/settings": {
+          table: "site_settings",
+          select: "id,setting_key,setting_value,updated_at",
+          order: "setting_key.asc",
+          key: "settings"
+        },
+        "/api/admin/history": {
+          table: "admin_history",
+          select: "id,admin_id,action,target_type,target_id,details,created_at",
+          order: "created_at.desc",
+          key: "history"
+        }
+      };
+
+      if (req.method === "GET" && readOnlyModules[pathname]) {
+        const module = readOnlyModules[pathname];
+        const rows = await supabaseRequest(
+          module.table + "?select=" + module.select +
+          "&order=" + module.order + "&limit=100"
+        );
+
+        sendJSON(res, 200, {
+          success: true,
+          [module.key]: Array.isArray(rows) ? rows : [],
+          limit: 100
+        });
+        return;
+      }
+
+      // Les clients sont calculés à partir des commandes : aucun compte client public.
+      if (req.method === "GET" && pathname === "/api/admin/customers") {
+        const rows = await supabaseRequest(
+          "orders?select=customer_name,customer_email,customer_phone,total_amount,currency,created_at&order=created_at.desc&limit=1000"
+        );
+        const customers = new Map();
+
+        for (const order of (Array.isArray(rows) ? rows : [])) {
+          const email = String(order.customer_email || "").trim().toLowerCase();
+          const phone = String(order.customer_phone || "").trim();
+          const key = email || phone;
+          if (!key) continue;
+
+          if (!customers.has(key)) {
+            customers.set(key, {
+              customer_name: order.customer_name || "",
+              customer_email: order.customer_email || "",
+              customer_phone: phone,
+              orders_count: 0,
+              total_spent: 0,
+              currency: order.currency || "USD",
+              last_order_at: order.created_at || null
+            });
+          }
+
+          const customer = customers.get(key);
+          customer.orders_count += 1;
+          const amount = Number(order.total_amount);
+          if (Number.isFinite(amount)) customer.total_spent += amount;
+          if (!customer.customer_name && order.customer_name) {
+            customer.customer_name = order.customer_name;
+          }
+        }
+
+        sendJSON(res, 200, {
+          success: true,
+          customers: Array.from(customers.values()),
+          derivedFromOrders: true,
+          sourceRowsLimit: 1000
+        });
+        return;
+      }
+
+      // --------------------------------------------
       // LISTE DES SERVICES POUR ADMIN
       // --------------------------------------------
 
