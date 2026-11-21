@@ -25,6 +25,12 @@
     .error{background:#fee2e2;color:#991b1b}
     .success{background:#dcfce7;color:#166534}
     .service{border:1px solid #e2e8f0;padding:14px;border-radius:9px;margin:12px 0}
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px}
+    .stat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:15px}
+    .stat strong{display:block;font-size:25px;color:#1455c0;margin-top:6px}
+    .stat span{font-size:13px;color:#64748b}
+    .section-note{color:#64748b;font-size:13px;line-height:1.5}
+
     .service h3{margin:0 0 7px}
     .actions{display:flex;gap:8px}
     .actions button{flex:1}
@@ -59,6 +65,16 @@
   </section>
 
   <section id="dashboard" class="hidden">
+    <div class="card">
+      <div class="topline">
+        <div><h2>Vue d'ensemble</h2><small>Indicateurs récupérés depuis Supabase</small></div>
+        <button type="button" onclick="loadOverview()">Actualiser</button>
+      </div>
+      <div id="overviewMessage" class="message"></div>
+      <div id="overviewStats" class="stats-grid"><div class="stat"><span>Chargement des données...</span></div></div>
+      <p class="section-note">Première version : jusqu'à 1 000 lignes par rubrique. Le montant confirmé additionne uniquement les paiements dont le statut est « confirmed ».</p>
+    </div>
+
     <div class="card topline">
       <div>
         <h2>Tableau de bord</h2>
@@ -220,7 +236,7 @@ async function openDashboard(profile) {
       "Connecté : " + profile.full_name;
   }
 
-  await loadServices();
+  await Promise.all([loadOverview(), loadServices()]);
 }
 
 // DECONNEXION
@@ -236,6 +252,46 @@ function logout(showLogin=true) {
 
   if (showLogin) {
     showMessage("loginMessage", "Vous êtes déconnecté.", "success");
+  }
+}
+
+// CHARGEMENT DES INDICATEURS REELS
+
+async function loadOverview() {
+  const target = document.getElementById("overviewStats");
+  target.textContent = "Chargement des indicateurs...";
+
+  try {
+    const data = await apiRequest("/api/admin/overview");
+    const stats = data.overview || {};
+    const cards = [
+      ["Services", stats.services],
+      ["Produits", stats.products],
+      ["Commandes", stats.orders],
+      ["Commandes en attente", stats.pendingOrders],
+      ["Paiements", stats.payments],
+      ["Paiements confirmés", stats.confirmedPayments],
+      ["Paiements en attente", stats.pendingPayments],
+      ["Médiathèque", stats.media],
+      ["Factures", stats.invoices],
+      ["Montant confirmé", Number(stats.confirmedAmount || 0).toLocaleString("fr-FR") + " $"]
+    ];
+
+    target.replaceChildren();
+    cards.forEach(([label, value]) => {
+      const card = document.createElement("div");
+      card.className = "stat";
+      const caption = document.createElement("span");
+      caption.textContent = label;
+      const number = document.createElement("strong");
+      number.textContent = value == null ? "—" : value;
+      card.append(caption, number);
+      target.appendChild(card);
+    });
+    hideMessage("overviewMessage");
+  } catch (error) {
+    target.textContent = "Les indicateurs ne sont pas disponibles.";
+    showMessage("overviewMessage", error.message);
   }
 }
 
