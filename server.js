@@ -413,6 +413,72 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+
+    const publicDownloadMatch = pathname.match(new RegExp("^/api/download/([0-9a-fA-F-]{36})$"));
+    if (req.method === "GET" && publicDownloadMatch) {
+      const token = publicDownloadMatch[1];
+      const tokenRows = await supabaseRequest("downloads?select=id,order_item_id,access_token,max_downloads,downloads_count,expires_at&access_token=eq." +
+        encodeURIComponent(token) + "&limit=1");
+      if (!Array.isArray(tokenRows) || !tokenRows.length) {
+        sendJSON(res, 404, { success: false, message: "Lien de téléchargement invalide." }); return;
+      }
+      const record = tokenRows[0];
+      const now = new Date();
+      if (!record.expires_at || new Date(record.expires_at).getTime() <= now.getTime()) {
+        sendJSON(res, 410, { success: false, message: "Ce lien de téléchargement a expiré." }); return;
+      }
+      const maxDownloads = Number(record.max_downloads || 0);
+      let claimed = false;
+      for (let attempt = 0; attempt < 3 && !claimed; attempt++) {
+        const count = Number(record.downloads_count || 0);
+        if (count >= maxDownloads) {
+          sendJSON(res, 410, { success: false, message: "La limite de téléchargements est atteinte." }); return;
+        }
+        const updated = await supabaseRequest("downloads?id=eq." + encodeURIComponent(record.id) +
+          "&downloads_count=eq." + count + "&expires_at=gt." + encodeURIComponent(now.toISOString()), {
+            method: "PATCH", body: { downloads_count: count + 1 }
+          });
+        if (Array.isArray(updated) && updated.length) claimed = true;
+        else {
+          const refreshed = await supabaseRequest("downloads?select=id,order_item_id,access_token,max_downloads,downloads_count,expires_at&id=eq." +
+            encodeURIComponent(record.id) + "&limit=1");
+          if (!Array.isArray(refreshed) || !refreshed.length) break;
+          Object.assign(record, refreshed[0]);
+        }
+      }
+      if (!claimed) {
+        sendJSON(res, 409, { success: false, message: "Lien déjà utilisé simultanément. Réessayez." }); return;
+      }
+      const items = await supabaseRequest("order_items?select=id,product_id,item_name&id=eq." +
+        encodeURIComponent(record.order_item_id) + "&limit=1");
+      if (!Array.isArray(items) || !items.length || !items[0].product_id) {
+        sendJSON(res, 404, { success: false, message: "Fichier numérique introuvable." }); return;
+      }
+      const products = await supabaseRequest("products?select=id,name,product_type,file_path&id=eq." +
+        encodeURIComponent(items[0].product_id) + "&limit=1");
+      if (!Array.isArray(products) || !products.length || products[0].product_type !== "digital" || !products[0].file_path) {
+        sendJSON(res, 404, { success: false, message: "Fichier numérique indisponible." }); return;
+      }
+      let storagePath = String(products[0].file_path);
+      if (storagePath.startsWith("/")) storagePath = storagePath.slice(1);
+      const signedResponse = await fetch(SUPABASE_URL + "/storage/v1/object/sign/store-products/" +
+        storagePath.split("/").map(encodeURIComponent).join("/"), {
+          method: "POST",
+          headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
+            "Content-Type": "application/json" },
+          body: JSON.stringify({ expiresIn: 60 })
+        });
+      const signedData = await signedResponse.json();
+      if (!signedResponse.ok || !signedData.signedURL) {
+        sendJSON(res, 502, { success: false, message: "Le fichier est temporairement indisponible." }); return;
+      }
+      const signedUrl = signedData.signedURL.startsWith("http") ? signedData.signedURL : SUPABASE_URL + signedData.signedURL;
+      sendJSON(res, 200, { success: true, product: products[0].name, signed_url: signedUrl,
+        remaining_downloads: Math.max(0, maxDownloads - Number(record.downloads_count || 0) - 1),
+        url_expires_in: 60 });
+      return;
+    }
+
     // ----------------------------------------------
     // SERVICES PUBLICS
     // ----------------------------------------------
@@ -913,6 +979,42 @@ const server = http.createServer(async (req, res) => {
       // CREATION D'UNE LIVRAISON
       // --------------------------------------------
 
+
+
+      const digitalDownloadsMatch = pathname.match(new RegExp("^/api/admin/orders/([0-9a-fA-F-]{36})/downloads$"));
+      if (digitalDownloadsMatch && req.method === "POST") {
+        const orderId = digitalDownloadsMatch[1];
+        const orders = await supabaseRequest("orders?select=id,payment_status&id=eq." + encodeURIComponent(orderId) + "&limit=1");
+        if (!Array.isArray(orders) || !orders.length) {
+          sendJSON(res, 404, { success: false, message: "Commande introuvable." }); return;
+        }
+        if (orders[0].payment_status !== "confirmed") {
+          sendJSON(res, 409, { success: false, message: "Les téléchargements sont disponibles après vérification réelle du paiement." }); return;
+        }
+        const items = await supabaseRequest("order_items?select=id,product_id,item_name&order_id=eq." + encodeURIComponent(orderId));
+        const links = [];
+        for (const item of (Array.isArray(items) ? items : [])) {
+          if (!item.product_id) continue;
+          const products = await supabaseRequest("products?select=id,name,product_type,file_path&id=eq." +
+            encodeURIComponent(item.product_id) + "&limit=1");
+          if (!Array.isArray(products) || !products.length || products[0].product_type !== "digital" || !products[0].file_path) continue;
+          const accessToken = crypto.randomUUID();
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+          await supabaseRequest("downloads", { method: "POST", body: {
+            order_item_id: item.id, access_token: accessToken, max_downloads: 3,
+            downloads_count: 0, expires_at: expiresAt
+          }});
+          links.push({ item_name: item.item_name || products[0].name,
+            url: "https://drbck-tech-it-pro.onrender.com/api/download/" + accessToken,
+            expires_at: expiresAt, max_downloads: 3 });
+        }
+        if (!links.length) {
+          sendJSON(res, 409, { success: false, message: "Aucun fichier numérique prêt à être livré pour cette commande." }); return;
+        }
+        await writeAdminHistory(admin, "downloads.issued", "order", orderId, { count: links.length });
+        sendJSON(res, 201, { success: true, message: "Liens sécurisés créés (7 jours, 3 téléchargements maximum chacun).", downloads: links });
+        return;
+      }
 
       const invoiceOrderMatch = pathname.match(new RegExp("^/api/admin/orders/([0-9a-fA-F-]{36})/invoice$"));
       if (invoiceOrderMatch && req.method === "POST") {
