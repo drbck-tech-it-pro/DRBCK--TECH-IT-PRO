@@ -479,6 +479,28 @@ const adminModules = {
   events: { title: "Activité du site", path: "/api/admin/events", field: "events" }
 };
 
+function exportAdminRowsCSV(rows, moduleName) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const columns = [...new Set(rows.flatMap(row => Object.keys(row || {})))];
+  const escapeCell = value => {
+    let text = value == null ? "" :
+      (typeof value === "object" ? JSON.stringify(value) : String(value));
+    if (/^[=+@-]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+  };
+  const csv = [columns.map(escapeCell).join(","),
+    ...rows.map(row => columns.map(column => escapeCell(row[column])).join(","))].join("\r\n");
+  const blob = new Blob(["\\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "drbck-" + moduleName + "-" + new Date().toISOString().slice(0, 10) + ".csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function loadAdminModule(name) {
   const module = adminModules[name];
   if (!module) return;
@@ -510,6 +532,13 @@ async function loadAdminModule(name) {
       output.textContent = rows.length
         ? JSON.stringify(rows, null, 2)
         : "Aucune donnée enregistrée pour le moment.";
+    }
+    if (rows.length) {
+      const exportButton = document.createElement("button");
+      exportButton.type = "button";
+      exportButton.textContent = "Exporter cette rubrique en CSV";
+      exportButton.addEventListener("click", () => exportAdminRowsCSV(rows, name));
+      output.prepend(exportButton);
     }
   } catch (error) {
     output.textContent = "Impossible de charger cette rubrique.";
