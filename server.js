@@ -473,9 +473,8 @@ const server = http.createServer(async (req, res) => {
         sendJSON(res, 502, { success: false, message: "Le fichier est temporairement indisponible." }); return;
       }
       const signedUrl = signedData.signedURL.startsWith("http") ? signedData.signedURL : SUPABASE_URL + signedData.signedURL;
-      sendJSON(res, 200, { success: true, product: products[0].name, signed_url: signedUrl,
-        remaining_downloads: Math.max(0, maxDownloads - Number(record.downloads_count || 0) - 1),
-        url_expires_in: 60 });
+      res.writeHead(302, { "Location": signedUrl, "Cache-Control": "no-store" });
+      res.end();
       return;
     }
 
