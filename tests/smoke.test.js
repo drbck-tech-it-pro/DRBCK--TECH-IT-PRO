@@ -98,3 +98,11 @@ test("manual payment verification is audited and synchronizes the order", () => 
   assert.match(admin, /Confirmer après vérification/);
   assert.match(admin, /Refuser après vérification/);
 });
+
+test("anonymous analytics feed the administrator dashboard", () => {
+  assert.match(server, /pathname === "\/api\/events"/);
+  assert.match(server, /site_events\?select=id,visitor_id,event_type/);
+  assert.match(publicScript, /drbckTrackEvent\("page_view"\)/);
+  assert.match(publicScript, /whatsapp_click/);
+  assert.match(admin, /Visites du site/);
+});
