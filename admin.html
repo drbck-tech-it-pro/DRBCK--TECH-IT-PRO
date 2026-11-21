@@ -96,6 +96,7 @@
 
         <label>Description</label>
         <textarea id="serviceDescription"></textarea>
+        <button type="button" class="secondary" onclick="generateDescription('service')">Rédiger avec DRBCK TECH IA</button>
 
         <label>Prix en dollars</label>
         <input id="servicePrice" placeholder="Exemple : 10 $">
@@ -130,6 +131,7 @@
         <input id="productName" required>
         <label>Description</label>
         <textarea id="productDescription"></textarea>
+        <button type="button" class="secondary" onclick="generateDescription('product')">Rédiger avec DRBCK TECH IA</button>
         <label>Prix en dollars (USD)</label>
         <input id="productPrice" type="number" min="0" step="0.01" required>
         <label>Type</label>
@@ -471,6 +473,8 @@ async function loadAdminModule(name) {
       renderInvoicesModule(rows, output);
     } else if (name === "payments") {
       renderPaymentsModule(rows, output);
+    } else if (name === "media") {
+      renderMediaModule(rows, output);
     } else {
       output.textContent = rows.length
         ? JSON.stringify(rows, null, 2)
@@ -482,6 +486,80 @@ async function loadAdminModule(name) {
   }
 }
 
+
+async function generateDescription(kind) {
+  const isService = kind === "service";
+  const name = document.getElementById(isService ? "serviceName" : "productName").value.trim();
+  const description = document.getElementById(isService ? "serviceDescription" : "productDescription");
+  const price = document.getElementById(isService ? "servicePrice" : "productPrice").value;
+  if (!name) {
+    showMessage(isService ? "serviceMessage" : "productMessage", "Saisissez d'abord le nom.");
+    return;
+  }
+  try {
+    const result = await apiRequest("/api/admin/ai/description", {
+      method: "POST",
+      body: JSON.stringify({ kind, prompt: "Nom : " + name + "\\nPrix indiqué : " + price +
+        "\\nInformations complémentaires : " + description.value })
+    });
+    description.value = result.description || "";
+    showMessage(isService ? "serviceMessage" : "productMessage", "Description générée. Vérifiez-la avant publication.", "success");
+  } catch (error) {
+    showMessage(isService ? "serviceMessage" : "productMessage", error.message);
+  }
+}
+
+function renderMediaModule(rows, target) {
+  target.replaceChildren();
+  const heading = document.createElement("p");
+  heading.textContent = "Génération d'images IA : les créations sont conservées en brouillon privé et ne sont jamais publiées automatiquement.";
+  const form = document.createElement("form");
+  const prompt = document.createElement("textarea");
+  prompt.placeholder = "Décrivez l'image professionnelle à créer...";
+  prompt.required = true;
+  prompt.maxLength = 2500;
+  const button = document.createElement("button");
+  button.type = "submit";
+  button.textContent = "Générer une image";
+  const status = document.createElement("p");
+  const preview = document.createElement("img");
+  preview.alt = "Aperçu de l'image générée";
+  preview.hidden = true;
+  preview.style.maxWidth = "100%";
+  preview.style.borderRadius = "10px";
+  form.append(prompt, button, status, preview);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    button.disabled = true;
+    status.textContent = "Génération en cours...";
+    try {
+      const result = await apiRequest("/api/admin/ai/image", {
+        method: "POST", body: JSON.stringify({ prompt: prompt.value.trim() })
+      });
+      preview.src = result.preview_url;
+      preview.hidden = false;
+      status.textContent = result.message || "Image enregistrée en brouillon.";
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+  target.append(heading, form);
+  const listHeading = document.createElement("h4");
+  listHeading.textContent = "Fichiers de la médiathèque";
+  target.appendChild(listHeading);
+  if (!rows.length) {
+    target.appendChild(document.createTextNode("Aucun fichier enregistré."));
+    return;
+  }
+  rows.forEach(row => {
+    const item = document.createElement("p");
+    item.textContent = (row.file_name || "Fichier") + " · " + (row.file_type || "") +
+      " · " + (row.status || "draft") + " · " + (row.source || "upload");
+    target.appendChild(item);
+  });
+}
 
 function renderPaymentsModule(rows, target) {
   target.replaceChildren();
