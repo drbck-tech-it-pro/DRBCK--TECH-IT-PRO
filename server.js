@@ -371,6 +371,16 @@ const server = http.createServer(async (req, res) => {
       req.method === "POST" &&
       pathname === "/api/admin/login"
     ) {
+      const forwardedIP = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+      const clientIP = forwardedIP || req.socket.remoteAddress || "unknown";
+      if (!checkRateLimit("admin-login:" + clientIP, 8, 15 * 60 * 1000)) {
+        sendJSON(res, 429, {
+          success: false,
+          message: "Trop de tentatives. Réessayez dans 15 minutes."
+        });
+        return;
+      }
+
       const body = await readBody(req);
 
       if (!body.email || !body.password) {
@@ -479,6 +489,32 @@ const server = http.createServer(async (req, res) => {
         profile: admin.profile
       });
 
+      return;
+    }
+
+    // ----------------------------------------------
+    // DECONNEXION ET REVOCATION DU JETON
+    // ----------------------------------------------
+
+    if (req.method === "POST" && pathname === "/api/admin/logout") {
+      const token = getBearerToken(req);
+      const response = await fetch(SUPABASE_URL + "/auth/v1/logout", {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_PUBLISHABLE_KEY,
+          "Authorization": "Bearer " + token
+        }
+      });
+
+      if (!response.ok) {
+        sendJSON(res, 502, {
+          success: false,
+          message: "La révocation de la session a échoué. Réessayez."
+        });
+        return;
+      }
+
+      sendJSON(res, 200, { success: true, message: "Session révoquée." });
       return;
     }
 
