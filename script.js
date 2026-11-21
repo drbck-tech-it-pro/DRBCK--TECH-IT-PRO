@@ -240,6 +240,76 @@ async function chargerProduitsPublics() {
             ". Paiement en attente de vérification. Notre équipe vous contactera.";
           orderForm.reset();
           quantityInput.value = "1";
+          const oldPanel = orderForm.querySelector(".payment-reference-panel");
+          if (oldPanel) oldPanel.remove();
+          const paymentPanel = document.createElement("section");
+          paymentPanel.className = "payment-reference-panel";
+          paymentPanel.appendChild(element("h4", "Effectuer le paiement"));
+          const paymentInfo = element("p", "Chargement des moyens de paiement...");
+          const paymentForm = document.createElement("form");
+          const methodSelect = document.createElement("select");
+          methodSelect.required = true;
+          const referenceInput = document.createElement("input");
+          referenceInput.placeholder = "Référence de transaction";
+          referenceInput.required = true;
+          referenceInput.maxLength = 120;
+          const paymentSubmit = element("button", "Envoyer la référence");
+          paymentSubmit.type = "submit";
+          const paymentStatus = element("p", "");
+          paymentStatus.setAttribute("aria-live", "polite");
+          paymentForm.append(methodSelect, referenceInput, paymentSubmit, paymentStatus);
+          paymentPanel.append(paymentInfo, paymentForm);
+          orderForm.appendChild(paymentPanel);
+          try {
+            const methodsResponse = await fetch(`${API_BASE}/api/payment-methods`, { cache: "no-store" });
+            const methodsData = await methodsResponse.json();
+            const methods = Array.isArray(methodsData.payment_methods) ? methodsData.payment_methods : [];
+            methodSelect.replaceChildren();
+            methods.forEach(method => {
+              const option = document.createElement("option");
+              option.value = method.name;
+              option.textContent = method.name;
+              methodSelect.appendChild(option);
+            });
+            const showMethodDetails = () => {
+              const selected = methods.find(method => method.name === methodSelect.value);
+              if (!selected) {
+                paymentInfo.textContent = "Aucun moyen de paiement configuré. Contactez-nous sur WhatsApp.";
+                return;
+              }
+              const details = selected.account_details || {};
+              const accountText = details.phone ? "Numéro : " + details.phone :
+                details.email ? "Compte : " + details.email : "";
+              paymentInfo.textContent = [selected.instructions || "", accountText,
+                "Le paiement sera confirmé après vérification."].filter(Boolean).join(" ");
+            };
+            methodSelect.addEventListener("change", showMethodDetails);
+            showMethodDetails();
+            if (!methods.length) paymentForm.hidden = true;
+            paymentForm.addEventListener("submit", async paymentEvent => {
+              paymentEvent.preventDefault();
+              paymentSubmit.disabled = true;
+              paymentStatus.textContent = "Enregistrement...";
+              try {
+                const paymentResponse = await fetch(`${API_BASE}/api/orders/${encodeURIComponent(result.order.id)}/payment-reference`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ method: methodSelect.value, transaction_reference: referenceInput.value.trim() })
+                });
+                const paymentResult = await paymentResponse.json();
+                if (!paymentResponse.ok || !paymentResult.success) throw new Error(paymentResult.message || "Référence non enregistrée.");
+                paymentStatus.textContent = paymentResult.message;
+                referenceInput.value = "";
+              } catch (paymentError) {
+                paymentStatus.textContent = paymentError.message;
+              } finally {
+                paymentSubmit.disabled = false;
+              }
+            });
+          } catch (paymentError) {
+            paymentInfo.textContent = "Moyens de paiement indisponibles. Contactez-nous sur WhatsApp.";
+            paymentForm.hidden = true;
+          }
         } catch (error) {
           orderMessage.textContent = error.message;
         } finally {
