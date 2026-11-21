@@ -467,6 +467,8 @@ async function loadAdminModule(name) {
       renderCustomersModule(rows, output);
     } else if (name === "paymentMethods") {
       renderPaymentMethodsModule(rows, output);
+    } else if (name === "invoices") {
+      renderInvoicesModule(rows, output);
     } else {
       output.textContent = rows.length
         ? JSON.stringify(rows, null, 2)
@@ -478,6 +480,49 @@ async function loadAdminModule(name) {
   }
 }
 
+
+function renderInvoicesModule(rows, target) {
+  target.replaceChildren();
+  if (!rows.length) {
+    target.textContent = "Aucune facture enregistrée pour le moment.";
+    return;
+  }
+  rows.forEach(invoice => {
+    const card = document.createElement("article");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = invoice.invoice_number || "Facture";
+    const details = document.createElement("p");
+    details.textContent = (invoice.customer_name || "Client") + " · " +
+      Number(invoice.amount || 0).toFixed(2) + " " + (invoice.currency || "USD") +
+      " · " + (invoice.status || "issued");
+    const date = document.createElement("p");
+    date.textContent = invoice.created_at
+      ? new Date(invoice.created_at).toLocaleString("fr-FR")
+      : "Date non disponible";
+    const download = document.createElement("button");
+    download.type = "button";
+    download.textContent = "Télécharger le PDF";
+    download.addEventListener("click", async () => {
+      download.disabled = true;
+      try {
+        const result = await apiRequest("/api/admin/invoices/" + encodeURIComponent(invoice.id) + "/download");
+        const link = document.createElement("a");
+        link.href = result.signed_url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Ouvrir le PDF " + (invoice.invoice_number || "");
+        card.appendChild(link);
+      } catch (error) {
+        showMessage("moduleMessage", error.message);
+      } finally {
+        download.disabled = false;
+      }
+    });
+    card.append(heading, details, date, download);
+    target.appendChild(card);
+  });
+}
 
 function renderCustomersModule(rows, target) {
   target.replaceChildren();
