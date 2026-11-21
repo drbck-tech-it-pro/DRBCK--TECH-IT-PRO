@@ -755,6 +755,31 @@ const server = http.createServer(async (req, res) => {
       // MISE A JOUR SECURISEE DES COMMANDES
       // --------------------------------------------
 
+      const orderDetailsMatch = pathname.match(/^\/api\/admin\/orders\/([0-9a-fA-F-]{36})\/details$/);
+      if (orderDetailsMatch && req.method === "GET") {
+        const orderId = orderDetailsMatch[1];
+        const [orders, items, payments, shipments] = await Promise.all([
+          supabaseRequest("orders?select=id,order_number,customer_name,customer_email,customer_phone,source,total_amount,currency,status,payment_status,delivery_status,created_at,updated_at&id=eq." + encodeURIComponent(orderId) + "&limit=1"),
+          supabaseRequest("order_items?select=id,product_id,item_name,quantity,unit_price,total_price,created_at&order_id=eq." + encodeURIComponent(orderId) + "&order=created_at.asc"),
+          supabaseRequest("payments?select=id,method,transaction_reference,amount,currency,status,verified_at,created_at&order_id=eq." + encodeURIComponent(orderId) + "&order=created_at.desc"),
+          supabaseRequest("shipments?select=id,delivery_address,tracking_number,delivery_status,notes,created_at,updated_at&order_id=eq." + encodeURIComponent(orderId) + "&order=created_at.desc")
+        ]);
+
+        if (!Array.isArray(orders) || !orders.length) {
+          sendJSON(res, 404, { success: false, message: "Commande introuvable." });
+          return;
+        }
+
+        sendJSON(res, 200, {
+          success: true,
+          order: orders[0],
+          items: Array.isArray(items) ? items : [],
+          payments: Array.isArray(payments) ? payments : [],
+          shipments: Array.isArray(shipments) ? shipments : []
+        });
+        return;
+      }
+
       const orderMatch = pathname.match(/^\/api\/admin\/orders\/([0-9a-fA-F-]{36})$/);
       if (orderMatch && req.method === "PATCH") {
         const orderId = orderMatch[1];
