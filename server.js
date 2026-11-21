@@ -382,6 +382,23 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ----------------------------------------------
+    // PRODUITS PUBLICS (SANS CHEMINS DE FICHIERS PRIVES)
+    // ----------------------------------------------
+
+    if (req.method === "GET" && pathname === "/api/products") {
+      const products = await supabaseRequest(
+        "products?select=id,name,description,price,currency,product_type,image_url,stock,created_at&active=eq.true&publication_status=eq.published&order=created_at.desc"
+      );
+
+      sendJSON(res, 200, {
+        success: true,
+        products: Array.isArray(products) ? products : []
+      });
+
+      return;
+    }
+
+    // ----------------------------------------------
     // CONNEXION ADMINISTRATEUR SUPABASE
     // ----------------------------------------------
 
