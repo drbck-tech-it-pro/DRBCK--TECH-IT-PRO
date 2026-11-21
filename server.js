@@ -826,9 +826,16 @@ const server = http.createServer(async (req, res) => {
           }
           if (updates.publication_status && updates.publication_status !== "published") updates.active = false;
           if (updates.publication_status === "published" && !Object.prototype.hasOwnProperty.call(updates, "active")) updates.active = true;
-          if (Object.prototype.hasOwnProperty.call(updates, "active") && updates.active === true && updates.publication_status && updates.publication_status !== "published") {
-            sendJSON(res, 400, { success: false, message: "Un produit doit être publié pour être activé." });
-            return;
+          if (updates.active === true) {
+            let resultingStatus = updates.publication_status;
+            if (!resultingStatus) {
+              const current = await supabaseRequest("products?select=publication_status&id=eq." + encodeURIComponent(productId) + "&limit=1");
+              resultingStatus = Array.isArray(current) && current[0] ? current[0].publication_status : null;
+            }
+            if (resultingStatus !== "published") {
+              sendJSON(res, 400, { success: false, message: "Un produit doit être publié pour être activé." });
+              return;
+            }
           }
           const updated = await supabaseRequest("products?id=eq." + encodeURIComponent(productId), { method: "PATCH", body: updates });
           await writeAdminHistory(admin, "product.updated", "product", productId, { fields: Object.keys(updates) });
@@ -900,6 +907,8 @@ const server = http.createServer(async (req, res) => {
           }
         );
 
+        const createdService = Array.isArray(created) ? created[0] : created;
+        await writeAdminHistory(admin, "service.created", "service", createdService && createdService.id, { nom: newService.nom });
         sendJSON(res, 201, {
           success: true,
           message: "Service ajouté.",
@@ -961,6 +970,7 @@ const server = http.createServer(async (req, res) => {
             }
           );
 
+          await writeAdminHistory(admin, "service.updated", "service", serviceId, { fields: Object.keys(updates) });
           sendJSON(res, 200, {
             success: true,
             message: "Service modifié.",
@@ -983,6 +993,7 @@ const server = http.createServer(async (req, res) => {
             }
           );
 
+          await writeAdminHistory(admin, "service.deleted", "service", serviceId);
           sendJSON(res, 200, {
             success: true,
             message: "Service supprimé."
