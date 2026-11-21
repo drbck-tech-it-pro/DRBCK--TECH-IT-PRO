@@ -510,6 +510,52 @@ const server = http.createServer(async (req, res) => {
       }
 
       // --------------------------------------------
+      // VUE D'ENSEMBLE ADMINISTRATEUR
+      // --------------------------------------------
+
+      if (req.method === "GET" && pathname === "/api/admin/overview") {
+        const tables = [
+          "services?select=id&limit=1000",
+          "products?select=id&limit=1000",
+          "orders?select=id,status,payment_status,total_amount&limit=1000",
+          "payments?select=id,status,amount&limit=1000",
+          "media_library?select=id&limit=1000",
+          "invoices?select=id&limit=1000"
+        ];
+
+        const [services, products, orders, payments, media, invoices] =
+          await Promise.all(tables.map(path => supabaseRequest(path)));
+
+        const safeArray = value => Array.isArray(value) ? value : [];
+        const orderRows = safeArray(orders);
+        const paymentRows = safeArray(payments);
+
+        const sum = rows => rows.reduce((total, row) => {
+          const amount = Number(row.amount ?? row.total_amount);
+          return total + (Number.isFinite(amount) ? amount : 0);
+        }, 0);
+
+        sendJSON(res, 200, {
+          success: true,
+          overview: {
+            services: safeArray(services).length,
+            products: safeArray(products).length,
+            orders: orderRows.length,
+            pendingOrders: orderRows.filter(row => row.status === "pending").length,
+            payments: paymentRows.length,
+            confirmedPayments: paymentRows.filter(row => row.status === "confirmed").length,
+            pendingPayments: paymentRows.filter(row => row.status === "pending").length,
+            confirmedAmount: sum(paymentRows.filter(row => row.status === "confirmed")),
+            media: safeArray(media).length,
+            invoices: safeArray(invoices).length,
+            sampleLimited: true
+          }
+        });
+
+        return;
+      }
+
+      // --------------------------------------------
       // LISTE DES SERVICES POUR ADMIN
       // --------------------------------------------
 
