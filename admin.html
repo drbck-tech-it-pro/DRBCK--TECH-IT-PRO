@@ -121,6 +121,40 @@
       <div id="servicesList">Chargement des services...</div>
     </div>
     <div class="card">
+      <h2>Gestion des produits</h2>
+      <p class="section-note">Crée et modifie les produits de la boutique. La publication est contrôlée par statut.</p>
+      <div id="productMessage" class="message"></div>
+      <form id="productForm">
+        <input type="hidden" id="productId">
+        <label>Nom du produit</label>
+        <input id="productName" required>
+        <label>Description</label>
+        <textarea id="productDescription"></textarea>
+        <label>Prix en dollars (USD)</label>
+        <input id="productPrice" type="number" min="0" step="0.01" required>
+        <label>Type</label>
+        <select id="productType"><option value="digital">Numérique</option><option value="physical">Physique</option></select>
+        <label>Stock (laisser vide si non suivi)</label>
+        <input id="productStock" type="number" min="0" step="1">
+        <label>URL de l'image</label>
+        <input id="productImage" type="url" placeholder="https://...">
+        <label>Chemin du fichier numérique (facultatif)</label>
+        <input id="productFile" placeholder="Chemin privé Storage">
+        <label>Statut de publication</label>
+        <select id="productStatus">
+          <option value="draft">Brouillon</option><option value="pending">En attente</option>
+          <option value="approved">Approuvé</option><option value="published">Publié</option>
+          <option value="rejected">Refusé</option>
+        </select>
+        <label><input id="productActive" type="checkbox" style="width:auto"> Produit actif (seulement si publié)</label>
+        <button type="submit" id="saveProductButton">Créer le produit</button>
+        <button type="button" class="secondary" onclick="resetProductForm()">Annuler</button>
+      </form>
+      <div class="topline"><h3>Produits enregistrés</h3><button type="button" onclick="loadProducts()">Actualiser</button></div>
+      <div id="productsList">Chargement des produits...</div>
+    </div>
+
+    <div class="card">
       <h2>Gestion de la boutique et des opérations</h2>
       <p class="section-note">Ces rubriques affichent les données réellement enregistrées. Les actions de modification seront activées avec leurs contrôles de sécurité et de validation.</p>
       <div class="stats-grid">
@@ -286,6 +320,116 @@ async function logout(showLogin=true) {
         : "Jeton local effacé. La révocation distante n'a pas pu être confirmée.",
       revoked ? "success" : "error"
     );
+  }
+}
+
+// GESTION DES PRODUITS
+
+function resetProductForm() {
+  document.getElementById("productForm").reset();
+  document.getElementById("productId").value = "";
+  document.getElementById("saveProductButton").textContent = "Créer le produit";
+}
+
+async function loadProducts() {
+  const target = document.getElementById("productsList");
+  target.textContent = "Chargement...";
+  try {
+    const data = await apiRequest("/api/admin/products");
+    const rows = data.products || [];
+    target.replaceChildren();
+    if (!rows.length) {
+      target.textContent = "Aucun produit enregistré.";
+      return;
+    }
+    rows.forEach(product => {
+      const card = document.createElement("div");
+      card.className = "service";
+      const title = document.createElement("h3");
+      title.textContent = product.name || "Produit sans nom";
+      const details = document.createElement("p");
+      details.textContent = (Number(product.price || 0).toFixed(2) + " USD · " +
+        (product.product_type === "physical" ? "Physique" : "Numérique") +
+        " · " + (product.publication_status || "draft") +
+        " · " + (product.active ? "Actif" : "Inactif"));
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.textContent = "Modifier";
+      edit.addEventListener("click", () => editProduct(product));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "danger";
+      remove.textContent = "Supprimer";
+      remove.addEventListener("click", () => deleteProduct(product.id));
+      actions.append(edit, remove);
+      card.append(title, details, actions);
+      target.append(card);
+    });
+  } catch (error) {
+    target.textContent = "Impossible de charger les produits.";
+    showMessage("productMessage", error.message);
+  }
+}
+
+function editProduct(product) {
+  document.getElementById("productId").value = product.id || "";
+  document.getElementById("productName").value = product.name || "";
+  document.getElementById("productDescription").value = product.description || "";
+  document.getElementById("productPrice").value = product.price ?? "";
+  document.getElementById("productType").value = product.product_type || "digital";
+  document.getElementById("productStock").value = product.stock ?? "";
+  document.getElementById("productImage").value = product.image_url || "";
+  document.getElementById("productFile").value = product.file_path || "";
+  document.getElementById("productStatus").value = product.publication_status || "draft";
+  document.getElementById("productActive").checked = product.active === true;
+  document.getElementById("saveProductButton").textContent = "Enregistrer les modifications";
+  document.getElementById("productForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+document.getElementById("productForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const id = document.getElementById("productId").value;
+  const status = document.getElementById("productStatus").value;
+  const body = {
+    name: document.getElementById("productName").value.trim(),
+    description: document.getElementById("productDescription").value.trim(),
+    price: Number(document.getElementById("productPrice").value),
+    product_type: document.getElementById("productType").value,
+    stock: document.getElementById("productStock").value,
+    image_url: document.getElementById("productImage").value.trim(),
+    file_path: document.getElementById("productFile").value.trim(),
+    publication_status: status,
+    active: document.getElementById("productActive").checked
+  };
+  const button = document.getElementById("saveProductButton");
+  button.disabled = true;
+  try {
+    await apiRequest(id ? "/api/admin/products/" + encodeURIComponent(id) : "/api/admin/products", {
+      method: id ? "PATCH" : "POST",
+      body: JSON.stringify(body)
+    });
+    showMessage("productMessage", id ? "Produit modifié." : "Produit créé.", "success");
+    resetProductForm();
+    await loadProducts();
+    await loadOverview();
+  } catch (error) {
+    showMessage("productMessage", error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+async function deleteProduct(id) {
+  if (!id || !confirm("Supprimer définitivement ce produit ?")) return;
+  try {
+    await apiRequest("/api/admin/products/" + encodeURIComponent(id), { method: "DELETE" });
+    showMessage("productMessage", "Produit supprimé.", "success");
+    await loadProducts();
+    await loadOverview();
+  } catch (error) {
+    showMessage("productMessage", error.message);
   }
 }
 
