@@ -1116,6 +1116,107 @@ const server = http.createServer(async (req, res) => {
 
 
 
+
+      // ASSISTANT IA ADMINISTRATEUR : DESCRIPTION DE PRODUIT OU SERVICE
+      if (req.method === "POST" && pathname === "/api/admin/ai/description") {
+        if (!checkRateLimit("admin-ai-description:" + admin.user.id, 10, 60 * 60 * 1000)) {
+          sendJSON(res, 429, { success: false, message: "Limite de génération atteinte. Réessayez plus tard." }); return;
+        }
+        const body = await readBody(req);
+        const prompt = String(body.prompt || "").trim().slice(0, 2000);
+        const kind = body.kind === "service" ? "service informatique" : "produit";
+        if (!prompt) { sendJSON(res, 400, { success: false, message: "Décrivez le produit ou le service." }); return; }
+        if (!OPENAI_API_KEY) { sendJSON(res, 503, { success: false, message: "La clé OpenAI n'est pas configurée." }); return; }
+        const response = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + OPENAI_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: OPENAI_MODEL,
+            instructions: "Tu es l'assistant rédactionnel interne de DRBCK TECH.IT.PRO à Likasi. Rédige en français une description claire, professionnelle et honnête. N'invente aucune caractéristique, garantie, compatibilité ou prix. Réponds uniquement par la description prête à publier.",
+            input: "Type : " + kind + "\nInformations fournies : " + prompt
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          console.error("Erreur IA description :", response.status, data);
+          sendJSON(res, response.status === 429 ? 503 : 502, { success: false,
+            message: "Génération indisponible. Vérifiez le crédit et les autorisations du compte OpenAI." }); return;
+        }
+        const description = extractOpenAIText(data);
+        if (!description) { sendJSON(res, 502, { success: false, message: "Aucune description reçue." }); return; }
+        await writeAdminHistory(admin, "ai.description.generated", kind, null, { promptLength: prompt.length });
+        sendJSON(res, 200, { success: true, description });
+        return;
+      }
+
+      // GENERATION D'IMAGE IA : STOCKAGE EN BROUILLON PRIVE
+      if (req.method === "POST" && pathname === "/api/admin/ai/image") {
+        if (!checkRateLimit("admin-ai-image:" + admin.user.id, 3, 60 * 60 * 1000)) {
+          sendJSON(res, 429, { success: false, message: "Limite de génération d'images atteinte. Réessayez plus tard." }); return;
+        }
+        const body = await readBody(req);
+        const prompt = String(body.prompt || "").trim().slice(0, 2500);
+        if (!prompt) { sendJSON(res, 400, { success: false, message: "Décrivez l'image à créer." }); return; }
+        if (!OPENAI_API_KEY) { sendJSON(res, 503, { success: false, message: "La clé OpenAI n'est pas configurée." }); return; }
+        const generated = await fetch("https://api.openai.com/v1/images/generations", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + OPENAI_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "gpt-image-2.6-flare", prompt,
+            n: 1, size: "1024x1024", output_format: "png" })
+        });
+        const imageData = await generated.json();
+        if (!generated.ok) {
+          console.error("Erreur IA image :", generated.status, imageData);
+          sendJSON(res, generated.status === 429 ? 503 : 502, { success: false,
+            message: "Génération d'image indisponible. Vérifiez le crédit et l'accès aux modèles d'image OpenAI." }); return;
+        }
+        const encoded = imageData && imageData.data && imageData.data[0] && imageData.data[0].b64_json;
+        if (!encoded) { sendJSON(res, 502, { success: false, message: "Aucune image reçue du fournisseur." }); return; }
+        const imageBuffer = Buffer.from(encoded, "base64");
+        if (!imageBuffer.length || imageBuffer.length > 12 * 1024 * 1024) {
+          sendJSON(res, 502, { success: false, message: "Taille d'image invalide." }); return;
+        }
+        const fileName = "ai-" + crypto.randomUUID() + ".png";
+        const storagePath = "generated/" + fileName;
+        const upload = await fetch(SUPABASE_URL + "/storage/v1/object/admin-media/" + storagePath, {
+          method: "POST",
+          headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
+            "Content-Type": "image/png", "x-upsert": "false" },
+          body: imageBuffer
+        });
+        if (!upload.ok) {
+          console.error("Echec stockage image IA :", upload.status, await upload.text());
+          sendJSON(res, 502, { success: false, message: "Image générée, mais impossible de l'enregistrer dans la médiathèque." }); return;
+        }
+        let media;
+        try {
+          const inserted = await supabaseRequest("media_library", { method: "POST", body: {
+            file_name: fileName, file_type: "image/png", storage_path: storagePath,
+            public_url: null, source: "ai", status: "draft"
+          }});
+          media = Array.isArray(inserted) ? inserted[0] : inserted;
+        } catch (error) {
+          await fetch(SUPABASE_URL + "/storage/v1/object/admin-media/" + storagePath, {
+            method: "DELETE", headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
+          }).catch(() => {});
+          throw error;
+        }
+        const signed = await fetch(SUPABASE_URL + "/storage/v1/object/sign/admin-media/" + storagePath, {
+          method: "POST",
+          headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
+            "Content-Type": "application/json" },
+          body: JSON.stringify({ expiresIn: 3600 })
+        });
+        const signedData = await signed.json();
+        if (!signed.ok || !signedData.signedURL) {
+          sendJSON(res, 502, { success: false, message: "Image enregistrée en brouillon, mais aperçu temporairement indisponible.", media }); return;
+        }
+        const previewUrl = signedData.signedURL.startsWith("http") ? signedData.signedURL : SUPABASE_URL + signedData.signedURL;
+        await writeAdminHistory(admin, "ai.image.generated", "media", media && media.id, { file_name: fileName, status: "draft" });
+        sendJSON(res, 201, { success: true, message: "Image générée et enregistrée en brouillon. Elle n'est pas publiée.", media, preview_url: previewUrl });
+        return;
+      }
+
       const digitalDownloadsMatch = pathname.match(new RegExp("^/api/admin/orders/([0-9a-fA-F-]{36})/downloads$"));
       if (digitalDownloadsMatch && req.method === "POST") {
         const orderId = digitalDownloadsMatch[1];
