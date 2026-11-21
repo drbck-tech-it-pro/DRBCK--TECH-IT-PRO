@@ -25,6 +25,12 @@
     .error{background:#fee2e2;color:#991b1b}
     .success{background:#dcfce7;color:#166534}
     .service{border:1px solid #e2e8f0;padding:14px;border-radius:9px;margin:12px 0}
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px}
+    .stat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:15px}
+    .stat strong{display:block;font-size:25px;color:#1455c0;margin-top:6px}
+    .stat span{font-size:13px;color:#64748b}
+    .section-note{color:#64748b;font-size:13px;line-height:1.5}
+
     .service h3{margin:0 0 7px}
     .actions{display:flex;gap:8px}
     .actions button{flex:1}
@@ -59,6 +65,16 @@
   </section>
 
   <section id="dashboard" class="hidden">
+    <div class="card">
+      <div class="topline">
+        <div><h2>Vue d'ensemble</h2><small>Indicateurs récupérés depuis Supabase</small></div>
+        <button type="button" onclick="loadOverview()">Actualiser</button>
+      </div>
+      <div id="overviewMessage" class="message"></div>
+      <div id="overviewStats" class="stats-grid"><div class="stat"><span>Chargement des données...</span></div></div>
+      <p class="section-note">Première version : jusqu'à 1 000 lignes par rubrique. Le montant confirmé additionne uniquement les paiements dont le statut est « confirmed ».</p>
+    </div>
+
     <div class="card topline">
       <div>
         <h2>Tableau de bord</h2>
@@ -80,6 +96,7 @@
 
         <label>Description</label>
         <textarea id="serviceDescription"></textarea>
+        <button type="button" class="secondary" onclick="generateDescription('service')">Rédiger avec DRBCK TECH IA</button>
 
         <label>Prix en dollars</label>
         <input id="servicePrice" placeholder="Exemple : 10 $">
@@ -103,6 +120,60 @@
         <button onclick="loadServices()">Actualiser</button>
       </div>
       <div id="servicesList">Chargement des services...</div>
+    </div>
+    <div class="card">
+      <h2>Gestion des produits</h2>
+      <p class="section-note">Crée et modifie les produits de la boutique. La publication est contrôlée par statut.</p>
+      <div id="productMessage" class="message"></div>
+      <form id="productForm">
+        <input type="hidden" id="productId">
+        <label>Nom du produit</label>
+        <input id="productName" required>
+        <label>Description</label>
+        <textarea id="productDescription"></textarea>
+        <button type="button" class="secondary" onclick="generateDescription('product')">Rédiger avec DRBCK TECH IA</button>
+        <label>Prix en dollars (USD)</label>
+        <input id="productPrice" type="number" min="0" step="0.01" required>
+        <label>Type</label>
+        <select id="productType"><option value="digital">Numérique</option><option value="physical">Physique</option></select>
+        <label>Stock (laisser vide si non suivi)</label>
+        <input id="productStock" type="number" min="0" step="1">
+        <label>URL de l'image</label>
+        <input id="productImage" type="url" placeholder="https://...">
+        <label>Chemin du fichier numérique (facultatif)</label>
+        <input id="productFile" placeholder="Chemin privé Storage">
+        <label>Statut de publication</label>
+        <select id="productStatus">
+          <option value="draft">Brouillon</option><option value="pending">En attente</option>
+          <option value="approved">Approuvé</option><option value="published">Publié</option>
+          <option value="rejected">Refusé</option>
+        </select>
+        <label><input id="productActive" type="checkbox" style="width:auto"> Produit actif (seulement si publié)</label>
+        <button type="submit" id="saveProductButton">Créer le produit</button>
+        <button type="button" class="secondary" onclick="resetProductForm()">Annuler</button>
+      </form>
+      <div class="topline"><h3>Produits enregistrés</h3><button type="button" onclick="loadProducts()">Actualiser</button></div>
+      <div id="productsList">Chargement des produits...</div>
+    </div>
+
+    <div class="card">
+      <h2>Gestion de la boutique et des opérations</h2>
+      <p class="section-note">Ces rubriques affichent les données réellement enregistrées. Les actions de modification seront activées avec leurs contrôles de sécurité et de validation.</p>
+      <div class="stats-grid">
+        <button type="button" onclick="loadAdminModule('products')">Produits</button>
+        <button type="button" onclick="loadAdminModule('orders')">Commandes</button>
+        <button type="button" onclick="loadAdminModule('payments')">Paiements</button>
+        <button type="button" onclick="loadAdminModule('customers')">Clients</button>
+        <button type="button" onclick="loadAdminModule('media')">Médiathèque</button>
+        <button type="button" onclick="loadAdminModule('invoices')">Factures</button>
+        <button type="button" onclick="loadAdminModule('history')">Historique</button>
+        <button type="button" onclick="loadAdminModule('shipments')">Livraisons</button>
+        <button type="button" onclick="loadAdminModule('paymentMethods')">Moyens de paiement</button>
+        <button type="button" onclick="loadAdminModule('events')">Activité du site</button>
+      </div>
+      <div id="moduleMessage" class="message"></div>
+      <h3 id="moduleTitle">Sélectionne une rubrique</h3>
+      <div id="moduleData" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;max-height:480px;overflow:auto">Les données s'afficheront ici après sélection.</div>
     </div>
   </section>
 
@@ -130,33 +201,60 @@ function hideMessage(id) {
   box.style.display = "none";
 }
 
-async function apiRequest(path, options={}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {})
+let refreshInProgress = null;
+
+async function refreshAdminSession() {
+  const refreshToken = sessionStorage.getItem("drbck_admin_refresh_token") || "";
+  if (!refreshToken) return false;
+  if (refreshInProgress) return refreshInProgress;
+  refreshInProgress = (async () => {
+    try {
+      const response = await fetch(API + "/api/admin/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.access_token || !data.refresh_token) return false;
+      adminToken = data.access_token;
+      sessionStorage.setItem("drbck_admin_token", data.access_token);
+      sessionStorage.setItem("drbck_admin_refresh_token", data.refresh_token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInProgress = null;
+    }
+  })();
+  return refreshInProgress;
+}
+
+async function apiRequest(path, options={}, allowRefresh=true) {
+  const send = async () => {
+    const headers = {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    };
+    if (adminToken) headers.Authorization = "Bearer " + adminToken;
+    return fetch(API + path, { ...options, headers });
   };
 
-  if (adminToken) {
-    headers.Authorization = "Bearer " + adminToken;
+  let response = await send();
+  if (response.status === 401 && allowRefresh &&
+      path !== "/api/admin/login" && path !== "/api/admin/refresh" &&
+      await refreshAdminSession()) {
+    response = await send();
   }
 
-  const response = await fetch(API + path, {
-    ...options,
-    headers
-  });
-
   let data;
-
   try {
     data = await response.json();
   } catch {
     throw new Error("Réponse invalide du serveur.");
   }
-
   if (!response.ok || data.success === false) {
     throw new Error(data.message || "Une erreur est survenue.");
   }
-
   return data;
 }
 
@@ -187,6 +285,7 @@ document.getElementById("loginForm").addEventListener("submit", async event => {
     }
 
     sessionStorage.setItem("drbck_admin_token", adminToken);
+    if (data.refresh_token) sessionStorage.setItem("drbck_admin_refresh_token", data.refresh_token);
 
     await openDashboard(data.profile);
 
@@ -220,22 +319,855 @@ async function openDashboard(profile) {
       "Connecté : " + profile.full_name;
   }
 
-  await loadServices();
+  await Promise.all([loadOverview(), loadServices(), loadProducts()]);
 }
 
 // DECONNEXION
 
-function logout(showLogin=true) {
+async function logout(showLogin=true) {
+  let revoked = false;
+
+  if (adminToken) {
+    try {
+      await apiRequest("/api/admin/logout", { method: "POST" });
+      revoked = true;
+    } catch (error) {
+      console.error("Révocation de session impossible :", error.message);
+    }
+  }
+
   adminToken = "";
   sessionStorage.removeItem("drbck_admin_token");
-
+  sessionStorage.removeItem("drbck_admin_refresh_token");
   dashboard.classList.add("hidden");
   loginSection.classList.remove("hidden");
-
   document.getElementById("password").value = "";
 
   if (showLogin) {
-    showMessage("loginMessage", "Vous êtes déconnecté.", "success");
+    showMessage(
+      "loginMessage",
+      revoked
+        ? "Session révoquée. Vous êtes déconnecté."
+        : "Jeton local effacé. La révocation distante n'a pas pu être confirmée.",
+      revoked ? "success" : "error"
+    );
+  }
+}
+
+// GESTION DES PRODUITS
+
+function resetProductForm() {
+  document.getElementById("productForm").reset();
+  document.getElementById("productId").value = "";
+  document.getElementById("saveProductButton").textContent = "Créer le produit";
+}
+
+async function loadProducts() {
+  const target = document.getElementById("productsList");
+  target.textContent = "Chargement...";
+  try {
+    const data = await apiRequest("/api/admin/products");
+    const rows = data.products || [];
+    target.replaceChildren();
+    if (!rows.length) {
+      target.textContent = "Aucun produit enregistré.";
+      return;
+    }
+    rows.forEach(product => {
+      const card = document.createElement("div");
+      card.className = "service";
+      const title = document.createElement("h3");
+      title.textContent = product.name || "Produit sans nom";
+      const details = document.createElement("p");
+      details.textContent = (Number(product.price || 0).toFixed(2) + " USD · " +
+        (product.product_type === "physical" ? "Physique" : "Numérique") +
+        " · " + (product.publication_status || "draft") +
+        " · " + (product.active ? "Actif" : "Inactif"));
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.textContent = "Modifier";
+      edit.addEventListener("click", () => editProduct(product));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "danger";
+      remove.textContent = "Supprimer";
+      remove.addEventListener("click", () => deleteProduct(product.id));
+      actions.append(edit, remove);
+      card.append(title, details, actions);
+      target.append(card);
+    });
+  } catch (error) {
+    target.textContent = "Impossible de charger les produits.";
+    showMessage("productMessage", error.message);
+  }
+}
+
+function editProduct(product) {
+  document.getElementById("productId").value = product.id || "";
+  document.getElementById("productName").value = product.name || "";
+  document.getElementById("productDescription").value = product.description || "";
+  document.getElementById("productPrice").value = product.price ?? "";
+  document.getElementById("productType").value = product.product_type || "digital";
+  document.getElementById("productStock").value = product.stock ?? "";
+  document.getElementById("productImage").value = product.image_url || "";
+  document.getElementById("productFile").value = product.file_path || "";
+  document.getElementById("productStatus").value = product.publication_status || "draft";
+  document.getElementById("productActive").checked = product.active === true;
+  document.getElementById("saveProductButton").textContent = "Enregistrer les modifications";
+  document.getElementById("productForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+document.getElementById("productForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const id = document.getElementById("productId").value;
+  const status = document.getElementById("productStatus").value;
+  const body = {
+    name: document.getElementById("productName").value.trim(),
+    description: document.getElementById("productDescription").value.trim(),
+    price: Number(document.getElementById("productPrice").value),
+    product_type: document.getElementById("productType").value,
+    stock: document.getElementById("productStock").value,
+    image_url: document.getElementById("productImage").value.trim(),
+    file_path: document.getElementById("productFile").value.trim(),
+    publication_status: status,
+    active: document.getElementById("productActive").checked
+  };
+  const button = document.getElementById("saveProductButton");
+  button.disabled = true;
+  try {
+    await apiRequest(id ? "/api/admin/products/" + encodeURIComponent(id) : "/api/admin/products", {
+      method: id ? "PATCH" : "POST",
+      body: JSON.stringify(body)
+    });
+    showMessage("productMessage", id ? "Produit modifié." : "Produit créé.", "success");
+    resetProductForm();
+    await loadProducts();
+    await loadOverview();
+  } catch (error) {
+    showMessage("productMessage", error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+async function deleteProduct(id) {
+  if (!id || !confirm("Supprimer définitivement ce produit ?")) return;
+  try {
+    await apiRequest("/api/admin/products/" + encodeURIComponent(id), { method: "DELETE" });
+    showMessage("productMessage", "Produit supprimé.", "success");
+    await loadProducts();
+    await loadOverview();
+  } catch (error) {
+    showMessage("productMessage", error.message);
+  }
+}
+
+// CONSULTATION DES RUBRIQUES ADMINISTRATIVES
+
+const adminModules = {
+  products: { title: "Produits", path: "/api/admin/products", field: "products" },
+  orders: { title: "Commandes", path: "/api/admin/orders", field: "orders" },
+  payments: { title: "Paiements", path: "/api/admin/payments", field: "payments" },
+  customers: { title: "Clients (issus des commandes)", path: "/api/admin/customers", field: "customers" },
+  media: { title: "Médiathèque", path: "/api/admin/media", field: "media" },
+  invoices: { title: "Factures", path: "/api/admin/invoices", field: "invoices" },
+  history: { title: "Historique administratif", path: "/api/admin/history", field: "history" },
+  shipments: { title: "Livraisons", path: "/api/admin/shipments", field: "shipments" },
+  paymentMethods: { title: "Moyens de paiement configurés", path: "/api/admin/payment-methods", field: "paymentMethods" },
+  events: { title: "Activité du site", path: "/api/admin/events", field: "events" }
+};
+
+function exportAdminRowsCSV(rows, moduleName) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const columns = [...new Set(rows.flatMap(row => Object.keys(row || {})))];
+  const escapeCell = value => {
+    let text = value == null ? "" :
+      (typeof value === "object" ? JSON.stringify(value) : String(value));
+    if (/^[=+@-]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+  };
+  const csv = [columns.map(escapeCell).join(","),
+    ...rows.map(row => columns.map(column => escapeCell(row[column])).join(","))].join("\r\n");
+  const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "drbck-" + moduleName + "-" + new Date().toISOString().slice(0, 10) + ".csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function loadAdminModule(name) {
+  const module = adminModules[name];
+  if (!module) return;
+
+  const title = document.getElementById("moduleTitle");
+  const output = document.getElementById("moduleData");
+  title.textContent = module.title;
+  output.textContent = "Chargement...";
+  hideMessage("moduleMessage");
+
+  try {
+    const data = await apiRequest(module.path);
+    const rows = data[module.field] || [];
+    if (name === "orders") {
+      renderOrdersModule(rows, output);
+    } else if (name === "customers") {
+      renderCustomersModule(rows, output);
+    } else if (name === "paymentMethods") {
+      renderPaymentMethodsModule(rows, output);
+    } else if (name === "invoices") {
+      renderInvoicesModule(rows, output);
+    } else if (name === "payments") {
+      renderPaymentsModule(rows, output);
+    } else if (name === "media") {
+      renderMediaModule(rows, output);
+    } else if (name === "settings") {
+      renderSettingsModule(rows, output);
+    } else {
+      output.textContent = rows.length
+        ? JSON.stringify(rows, null, 2)
+        : "Aucune donnée enregistrée pour le moment.";
+    }
+    if (rows.length) {
+      const exportButton = document.createElement("button");
+      exportButton.type = "button";
+      exportButton.textContent = "Exporter cette rubrique en CSV";
+      exportButton.addEventListener("click", () => exportAdminRowsCSV(rows, name));
+      output.prepend(exportButton);
+    }
+  } catch (error) {
+    output.textContent = "Impossible de charger cette rubrique.";
+    showMessage("moduleMessage", error.message);
+  }
+}
+
+
+async function generateDescription(kind) {
+  const isService = kind === "service";
+  const name = document.getElementById(isService ? "serviceName" : "productName").value.trim();
+  const description = document.getElementById(isService ? "serviceDescription" : "productDescription");
+  const price = document.getElementById(isService ? "servicePrice" : "productPrice").value;
+  if (!name) {
+    showMessage(isService ? "serviceMessage" : "productMessage", "Saisissez d'abord le nom.");
+    return;
+  }
+  try {
+    const result = await apiRequest("/api/admin/ai/description", {
+      method: "POST",
+      body: JSON.stringify({ kind, prompt: "Nom : " + name + "\\nPrix indiqué : " + price +
+        "\\nInformations complémentaires : " + description.value })
+    });
+    description.value = result.description || "";
+    showMessage(isService ? "serviceMessage" : "productMessage", "Description générée. Vérifiez-la avant publication.", "success");
+  } catch (error) {
+    showMessage(isService ? "serviceMessage" : "productMessage", error.message);
+  }
+}
+
+function renderSettingsModule(rows, target) {
+  target.replaceChildren();
+  const saved = new Map(rows.map(row => [row.setting_key, row.setting_value || {}]));
+  const defaults = {
+    business_profile: { name: "DRBCK TECH.IT.PRO", slogan: "Service rapide et fiable à Likasi", city: "Likasi", country: "RDC", description: "" },
+    contact: { whatsapp: "+243 972 052 103", public_email: "", phone: "", address: "" },
+    branding: { logo_url: "", primary_color: "#10264a", secondary_color: "#d4a62a" },
+    delivery: { methods: [], instructions: "", estimated_time: "" },
+    storefront: { currency: "USD", allow_website_orders: true, allow_whatsapp_orders: true },
+    notifications: { email_enabled: false, whatsapp_enabled: false }
+  };
+  const intro = document.createElement("p");
+  intro.textContent = "Modifiez les paramètres de l'entreprise. Les données sont enregistrées dans Supabase. Gardez la devise en USD. Les alertes e-mail/WhatsApp nécessitent aussi un fournisseur de notification configuré.";
+  target.appendChild(intro);
+  Object.entries(defaults).forEach(([key, defaultValue]) => {
+    const card = document.createElement("article");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = key.replace(/_/g, " ");
+    const editor = document.createElement("textarea");
+    editor.rows = 6;
+    editor.maxLength = 8000;
+    editor.style.width = "100%";
+    editor.value = JSON.stringify(saved.get(key) || defaultValue, null, 2);
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "Enregistrer";
+    const status = document.createElement("p");
+    save.addEventListener("click", async () => {
+      let value;
+      try {
+        value = JSON.parse(editor.value);
+      } catch {
+        status.textContent = "JSON invalide. Corrigez les guillemets et les virgules.";
+        return;
+      }
+      save.disabled = true;
+      status.textContent = "Enregistrement...";
+      try {
+        const result = await apiRequest("/api/admin/settings/" + key, {
+          method: "POST",
+          body: JSON.stringify({ setting_value: value })
+        });
+        status.textContent = result.message || "Réglages enregistrés.";
+        status.className = "success";
+      } catch (error) {
+        status.textContent = error.message;
+        status.className = "error";
+      } finally {
+        save.disabled = false;
+      }
+    });
+    card.append(heading, editor, save, status);
+    target.appendChild(card);
+  });
+}
+
+function renderMediaModule(rows, target) {
+  target.replaceChildren();
+  const heading = document.createElement("p");
+  heading.textContent = "Génération d'images IA : les créations sont conservées en brouillon privé et ne sont jamais publiées automatiquement.";
+  const videoNote = document.createElement("p");
+  videoNote.textContent = "Génération vidéo non activée : l'API vidéo Sora d'OpenAI a été arrêtée. Un fournisseur vidéo compatible devra être connecté avant d'activer cette fonction.";
+
+  const form = document.createElement("form");
+  const prompt = document.createElement("textarea");
+  prompt.placeholder = "Décrivez l'image professionnelle à créer...";
+  prompt.required = true;
+  prompt.maxLength = 2500;
+  const button = document.createElement("button");
+  button.type = "submit";
+  button.textContent = "Générer une image";
+  const status = document.createElement("p");
+  const preview = document.createElement("img");
+  preview.alt = "Aperçu de l'image générée";
+  preview.hidden = true;
+  preview.style.maxWidth = "100%";
+  preview.style.borderRadius = "10px";
+  form.append(prompt, button, status, preview);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    button.disabled = true;
+    status.textContent = "Génération en cours...";
+    try {
+      const result = await apiRequest("/api/admin/ai/image", {
+        method: "POST", body: JSON.stringify({ prompt: prompt.value.trim() })
+      });
+      preview.src = result.preview_url;
+      preview.hidden = false;
+      status.textContent = result.message || "Image enregistrée en brouillon.";
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+  target.append(heading, videoNote, form);
+  const listHeading = document.createElement("h4");
+  listHeading.textContent = "Fichiers de la médiathèque";
+  target.appendChild(listHeading);
+  if (!rows.length) {
+    target.appendChild(document.createTextNode("Aucun fichier enregistré."));
+    return;
+  }
+  rows.forEach(row => {
+    const item = document.createElement("article");
+    item.className = "service";
+    const label = document.createElement("p");
+    label.textContent = (row.file_name || "Fichier") + " · " + (row.file_type || "") +
+      " · " + (row.status || "draft") + " · " + (row.source || "upload");
+    item.appendChild(label);
+    if (row.source === "ai" && row.status === "draft") {
+      const approve = document.createElement("button");
+      approve.type = "button";
+      approve.textContent = "Valider et publier";
+      approve.addEventListener("click", async () => {
+        approve.disabled = true;
+        try {
+          const result = await apiRequest("/api/admin/media/" + encodeURIComponent(row.id) + "/publish", {
+            method: "POST", body: JSON.stringify({})
+          });
+          showMessage("moduleMessage", result.message || "Média publié.", "success");
+          await loadAdminModule("media");
+        } catch (error) {
+          showMessage("moduleMessage", error.message);
+          approve.disabled = false;
+        }
+      });
+      item.appendChild(approve);
+    }
+    if (row.public_url) {
+      const link = document.createElement("a");
+      link.href = row.public_url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Voir le média publié";
+      item.appendChild(link);
+    }
+    target.appendChild(item);
+  });
+}
+
+async function verifyPayment(paymentId, decision) {
+  const actionText = decision === "confirmed" ? "CONFIRMER" : "REFUSER";
+  const note = window.prompt("Après avoir vérifié la transaction dans le compte officiel du fournisseur, indiquez la preuve ou le détail de vérification (8 caractères minimum) :");
+  if (note === null) return;
+  if (note.trim().length < 8) {
+    showMessage("moduleMessage", "Ajoutez une note de vérification suffisamment précise.");
+    return;
+  }
+  if (!window.confirm("Confirmez-vous la décision : " + actionText + " ce paiement ?")) return;
+  try {
+    const result = await apiRequest("/api/admin/payments/" + encodeURIComponent(paymentId) + "/verify", {
+      method: "PATCH",
+      body: JSON.stringify({ decision, verification_note: note.trim() })
+    });
+    showMessage("moduleMessage", result.message || "Paiement traité.", "success");
+    await Promise.all([loadAdminModule("payments"), loadOverview()]);
+  } catch (error) {
+    showMessage("moduleMessage", error.message);
+  }
+}
+
+function renderPaymentsModule(rows, target) {
+  target.replaceChildren();
+  if (!rows.length) {
+    target.textContent = "Aucun paiement enregistré pour le moment.";
+    return;
+  }
+  const note = document.createElement("p");
+  note.textContent = "Vérifiez chaque référence dans le compte officiel Airtel Money, M-Pesa ou PayPal avant toute confirmation. La note de vérification est conservée dans l'historique administratif.";
+  target.appendChild(note);
+  rows.forEach(payment => {
+    const card = document.createElement("article");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = payment.method || "Paiement";
+    const details = document.createElement("p");
+    details.textContent = "Montant : " + Number(payment.amount || 0).toFixed(2) + " " +
+      (payment.currency || "USD") + " · État : " + (payment.status || "pending");
+    const reference = document.createElement("p");
+    reference.textContent = "Référence : " + (payment.transaction_reference || "Non fournie");
+    const date = document.createElement("p");
+    date.textContent = payment.created_at ? new Date(payment.created_at).toLocaleString("fr-FR") : "";
+    card.append(heading, details, reference, date);
+    if (payment.status === "pending") {
+      const confirm = document.createElement("button");
+      confirm.type = "button";
+      confirm.textContent = "Confirmer après vérification";
+      confirm.addEventListener("click", () => verifyPayment(payment.id, "confirmed"));
+      const reject = document.createElement("button");
+      reject.type = "button";
+      reject.className = "secondary";
+      reject.textContent = "Refuser après vérification";
+      reject.addEventListener("click", () => verifyPayment(payment.id, "rejected"));
+      card.append(confirm, reject);
+    } else if (payment.status === "confirmed") {
+      const status = document.createElement("p");
+      status.textContent = "Paiement confirmé le " + (payment.verified_at
+        ? new Date(payment.verified_at).toLocaleString("fr-FR") : "date non disponible");
+      card.appendChild(status);
+    }
+    target.appendChild(card);
+  });
+}
+
+function renderInvoicesModule(rows, target) {
+  target.replaceChildren();
+  const notice = document.createElement("p");
+  notice.textContent = "Les factures PDF sont stockées en privé et téléchargeables ici. L'envoi automatique par e-mail sera activé après connexion d'un fournisseur d'e-mail vérifié.";
+  target.appendChild(notice);
+  if (!rows.length) {
+    target.appendChild(document.createTextNode("Aucune facture enregistrée pour le moment."));
+    return;
+  }
+  rows.forEach(invoice => {
+    const card = document.createElement("article");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = invoice.invoice_number || "Facture";
+    const details = document.createElement("p");
+    details.textContent = (invoice.customer_name || "Client") + " · " +
+      Number(invoice.amount || 0).toFixed(2) + " " + (invoice.currency || "USD") +
+      " · " + (invoice.status || "issued");
+    const date = document.createElement("p");
+    date.textContent = invoice.created_at
+      ? new Date(invoice.created_at).toLocaleString("fr-FR")
+      : "Date non disponible";
+    const download = document.createElement("button");
+    download.type = "button";
+    download.textContent = "Télécharger le PDF";
+    download.addEventListener("click", async () => {
+      download.disabled = true;
+      try {
+        const result = await apiRequest("/api/admin/invoices/" + encodeURIComponent(invoice.id) + "/download");
+        const link = document.createElement("a");
+        link.href = result.signed_url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Ouvrir le PDF " + (invoice.invoice_number || "");
+        card.appendChild(link);
+      } catch (error) {
+        showMessage("moduleMessage", error.message);
+      } finally {
+        download.disabled = false;
+      }
+    });
+    card.append(heading, details, date, download);
+    target.appendChild(card);
+  });
+}
+
+function renderCustomersModule(rows, target) {
+  target.replaceChildren();
+  if (!rows.length) {
+    target.textContent = "Aucun client issu des commandes pour le moment.";
+    return;
+  }
+
+  const intro = document.createElement("p");
+  intro.textContent = rows.length + " fiche(s) client — coordonnées et historique calculés à partir des commandes. Aucun compte client public n'est créé.";
+  target.appendChild(intro);
+
+  rows.forEach(customer => {
+    const card = document.createElement("article");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = customer.customer_name || "Client sans nom";
+    const contact = document.createElement("p");
+    contact.textContent = [
+      customer.customer_email || "E-mail non fourni",
+      customer.customer_phone || "Téléphone non fourni"
+    ].join(" · ");
+    const stats = document.createElement("p");
+    stats.textContent = "Commandes : " + Number(customer.orders_count || 0) +
+      " · Total dépensé : " + Number(customer.total_spent || 0).toFixed(2) +
+      " " + (customer.currency || "USD");
+    const last = document.createElement("p");
+    last.textContent = "Dernière commande : " +
+      (customer.last_order_at ? new Date(customer.last_order_at).toLocaleString("fr-FR") : "—");
+    const actions = document.createElement("div");
+    if (customer.customer_phone) {
+      const phone = document.createElement("a");
+      phone.href = "tel:" + String(customer.customer_phone).replace(/[^+0-9]/g, "");
+      phone.textContent = "Appeler";
+      actions.appendChild(phone);
+    }
+    if (customer.customer_email) {
+      const email = document.createElement("a");
+      email.href = "mailto:" + encodeURIComponent(customer.customer_email);
+      email.textContent = customer.customer_phone ? " · Envoyer un e-mail" : "Envoyer un e-mail";
+      actions.appendChild(email);
+    }
+    card.append(heading, contact, stats, last, actions);
+    target.appendChild(card);
+  });
+}
+
+function renderPaymentMethodsModule(rows, target) {
+  target.replaceChildren();
+  if (!rows.length) {
+    target.textContent = "Aucun moyen de paiement configuré dans Supabase.";
+    return;
+  }
+  rows.forEach(method => {
+    const card = document.createElement("div");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = method.name || "Moyen de paiement";
+    const enabledLabel = document.createElement("label");
+    const enabled = document.createElement("input");
+    enabled.type = "checkbox";
+    enabled.checked = method.enabled === true;
+    enabledLabel.append(enabled, document.createTextNode(" Activé sur le site"));
+    const instructionLabel = document.createElement("label");
+    instructionLabel.textContent = "Instructions affichées au client";
+    const instructions = document.createElement("textarea");
+    instructions.rows = 3;
+    instructions.maxLength = 3000;
+    instructions.value = method.instructions || "";
+    const accountLabel = document.createElement("label");
+    accountLabel.textContent = "Coordonnées du compte (JSON)";
+    const account = document.createElement("textarea");
+    account.rows = 4;
+    account.spellcheck = false;
+    account.value = JSON.stringify(method.account_details || {}, null, 2);
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "Enregistrer ce moyen de paiement";
+    save.addEventListener("click", async () => {
+      let accountDetails;
+      try {
+        accountDetails = JSON.parse(account.value || "{}");
+        if (!accountDetails || typeof accountDetails !== "object" || Array.isArray(accountDetails)) {
+          throw new Error("Un objet JSON est requis.");
+        }
+      } catch (error) {
+        showMessage("moduleMessage", "Coordonnées JSON invalides : " + error.message);
+        return;
+      }
+      save.disabled = true;
+      try {
+        await apiRequest("/api/admin/payment-methods/" + encodeURIComponent(method.id), {
+          method: "PATCH",
+          body: JSON.stringify({ enabled: enabled.checked, instructions: instructions.value, account_details: accountDetails })
+        });
+        showMessage("moduleMessage", "Moyen de paiement enregistré.", "success");
+      } catch (error) {
+        showMessage("moduleMessage", error.message);
+      } finally {
+        save.disabled = false;
+      }
+    });
+    card.append(heading, enabledLabel, instructionLabel, instructions, accountLabel, account, save);
+    target.append(card);
+  });
+}
+
+function renderOrdersModule(rows, target) {
+  target.replaceChildren();
+  if (!rows.length) {
+    target.textContent = "Aucune commande enregistrée.";
+    return;
+  }
+  const orderStates = ["pending", "processing", "completed", "cancelled", "refunded"];
+  const deliveryStates = ["pending", "preparing", "shipped", "delivered", "returned"];
+
+  rows.forEach(order => {
+    const card = document.createElement("div");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = (order.order_number || order.id) + " — " + (order.customer_name || "Client");
+    const summary = document.createElement("p");
+    summary.textContent = Number(order.total_amount || 0).toFixed(2) + " " + (order.currency || "USD") +
+      " · Paiement : " + (order.payment_status || "pending") + " · Source : " + (order.source || "website");
+
+    const details = document.createElement("div");
+    details.className = "order-details";
+    const viewDetails = document.createElement("button");
+    viewDetails.type = "button";
+    viewDetails.className = "secondary";
+    viewDetails.textContent = "Voir les détails (articles, paiements, livraisons)";
+    viewDetails.addEventListener("click", async () => {
+      viewDetails.disabled = true;
+      viewDetails.textContent = "Chargement...";
+      try {
+        const data = await apiRequest("/api/admin/orders/" + encodeURIComponent(order.id) + "/details");
+        renderOrderDetails(data, details);
+        details.hidden = false;
+      } catch (error) {
+        details.hidden = false;
+        details.textContent = "Impossible de charger les détails : " + error.message;
+      } finally {
+        viewDetails.disabled = false;
+        viewDetails.textContent = "Actualiser les détails";
+      }
+    });
+
+    const statusLabel = document.createElement("label");
+    statusLabel.textContent = "État de la commande";
+    const status = document.createElement("select");
+    orderStates.forEach(value => {
+      const option = document.createElement("option");
+      option.value = value; option.textContent = value; status.append(option);
+    });
+    status.value = order.status || "pending";
+
+    const deliveryLabel = document.createElement("label");
+    deliveryLabel.textContent = "État de la livraison";
+    const delivery = document.createElement("select");
+    deliveryStates.forEach(value => {
+      const option = document.createElement("option");
+      option.value = value; option.textContent = value; delivery.append(option);
+    });
+    delivery.value = order.delivery_status || "pending";
+
+    const save = document.createElement("button");
+    save.type = "button"; save.textContent = "Enregistrer les états";
+    save.addEventListener("click", async () => {
+      try {
+        await apiRequest("/api/admin/orders/" + encodeURIComponent(order.id), {
+          method: "PATCH",
+          body: JSON.stringify({ status: status.value, delivery_status: delivery.value })
+        });
+        showMessage("moduleMessage", "Commande mise à jour.", "success");
+        await loadOverview();
+      } catch (error) { showMessage("moduleMessage", error.message); }
+    });
+
+    const address = document.createElement("input");
+    address.placeholder = "Adresse de livraison";
+    const tracking = document.createElement("input");
+    tracking.placeholder = "Numéro de suivi";
+    const createShipment = document.createElement("button");
+    createShipment.type = "button";
+    createShipment.className = "secondary";
+    createShipment.textContent = "Créer une fiche de livraison";
+    createShipment.addEventListener("click", async () => {
+      try {
+        await apiRequest("/api/admin/shipments", {
+          method: "POST",
+          body: JSON.stringify({ order_id: order.id, delivery_address: address.value, tracking_number: tracking.value, delivery_status: delivery.value })
+        });
+        showMessage("moduleMessage", "Fiche de livraison créée.", "success");
+        viewDetails.click();
+      } catch (error) { showMessage("moduleMessage", error.message); }
+    });
+
+    const createInvoice = document.createElement("button");
+    createInvoice.type = "button";
+    createInvoice.className = "secondary";
+    createInvoice.textContent = "Créer / télécharger la facture PDF";
+    createInvoice.addEventListener("click", async () => {
+      createInvoice.disabled = true;
+      createInvoice.textContent = "Préparation de la facture...";
+      try {
+        const result = await apiRequest("/api/admin/orders/" + encodeURIComponent(order.id) + "/invoice", {
+          method: "POST",
+          body: JSON.stringify({})
+        });
+        const link = document.createElement("a");
+        link.href = result.signed_url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Ouvrir la facture " + ((result.invoice && result.invoice.invoice_number) || "PDF");
+        link.className = "invoice-download-link";
+        details.appendChild(link);
+        details.hidden = false;
+        showMessage("moduleMessage", result.message || "Facture prête.", "success");
+      } catch (error) {
+        showMessage("moduleMessage", error.message);
+      } finally {
+        createInvoice.disabled = false;
+        createInvoice.textContent = "Créer / télécharger la facture PDF";
+      }
+    });
+
+    const createDownloads = document.createElement("button");
+    createDownloads.type = "button";
+    createDownloads.className = "secondary";
+    createDownloads.textContent = "Créer les liens de téléchargement";
+    createDownloads.addEventListener("click", async () => {
+      createDownloads.disabled = true;
+      try {
+        const result = await apiRequest("/api/admin/orders/" + encodeURIComponent(order.id) + "/downloads", {
+          method: "POST",
+          body: JSON.stringify({})
+        });
+        (result.downloads || []).forEach(file => {
+          const link = document.createElement("a");
+          link.href = file.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = "Télécharger " + file.item_name + " (3 accès, expire le " +
+            new Date(file.expires_at).toLocaleDateString("fr-FR") + ")";
+          link.className = "invoice-download-link";
+          details.appendChild(link);
+        });
+        details.hidden = false;
+        showMessage("moduleMessage", result.message || "Liens créés.", "success");
+      } catch (error) {
+        showMessage("moduleMessage", error.message);
+      } finally {
+        createDownloads.disabled = false;
+      }
+    });
+
+    card.append(heading, summary, viewDetails, details, statusLabel, status, deliveryLabel, delivery, save, address, tracking, createShipment, createInvoice, createDownloads);
+    target.append(card);
+  });
+}
+
+function renderOrderDetails(data, target) {
+  target.replaceChildren();
+  const addSection = (headingText, rows, formatter, emptyText) => {
+    const section = document.createElement("section");
+    const heading = document.createElement("h4");
+    heading.textContent = headingText;
+    section.appendChild(heading);
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.textContent = emptyText;
+      section.appendChild(empty);
+    } else {
+      rows.forEach(row => {
+        const line = document.createElement("p");
+        line.textContent = formatter(row);
+        section.appendChild(line);
+      });
+    }
+    target.appendChild(section);
+  };
+
+  const order = data.order || {};
+  const customer = document.createElement("p");
+  customer.textContent = "Client : " + (order.customer_name || "—") +
+    " · " + (order.customer_email || "sans e-mail") +
+    " · " + (order.customer_phone || "sans téléphone");
+  target.appendChild(customer);
+
+  addSection("Articles commandés", data.items || [], row =>
+    (row.item_name || "Article") + " × " + row.quantity + " — " +
+    Number(row.total_price || 0).toFixed(2) + " " + (order.currency || "USD"),
+    "Aucun article détaillé enregistré."
+  );
+  addSection("Historique des paiements", data.payments || [], row =>
+    (row.method || "Méthode inconnue") + " · " + (row.status || "pending") +
+    " · " + Number(row.amount || 0).toFixed(2) + " " + (row.currency || "USD") +
+    (row.transaction_reference ? " · Référence : " + row.transaction_reference : ""),
+    "Aucun paiement enregistré."
+  );
+  addSection("Livraisons", data.shipments || [], row =>
+    (row.delivery_status || "pending") +
+    (row.delivery_address ? " · Adresse : " + row.delivery_address : "") +
+    (row.tracking_number ? " · Suivi : " + row.tracking_number : "") +
+    (row.notes ? " · Note : " + row.notes : ""),
+    "Aucune fiche de livraison enregistrée."
+  );
+}
+
+// CHARGEMENT DES INDICATEURS REELS
+
+async function loadOverview() {
+  const target = document.getElementById("overviewStats");
+  target.textContent = "Chargement des indicateurs...";
+
+  try {
+    const data = await apiRequest("/api/admin/overview");
+    const stats = data.overview || {};
+    const cards = [
+      ["Services", stats.services],
+      ["Produits", stats.products],
+      ["Commandes", stats.orders],
+      ["Commandes en attente", stats.pendingOrders],
+      ["Paiements", stats.payments],
+      ["Paiements confirmés", stats.confirmedPayments],
+      ["Paiements en attente", stats.pendingPayments],
+      ["Médiathèque", stats.media],
+      ["Factures", stats.invoices],
+      ["Visites du site (échantillon)", stats.siteVisits],
+      ["Visiteurs uniques (échantillon)", stats.uniqueVisitors],
+      ["Montant confirmé", Number(stats.confirmedAmount || 0).toLocaleString("fr-FR") + " $"]
+    ];
+
+    target.replaceChildren();
+    cards.forEach(([label, value]) => {
+      const card = document.createElement("div");
+      card.className = "stat";
+      const caption = document.createElement("span");
+      caption.textContent = label;
+      const number = document.createElement("strong");
+      number.textContent = value == null ? "—" : value;
+      card.append(caption, number);
+      target.appendChild(card);
+    });
+    hideMessage("overviewMessage");
+  } catch (error) {
+    target.textContent = "Les indicateurs ne sont pas disponibles.";
+    showMessage("overviewMessage", error.message);
   }
 }
 

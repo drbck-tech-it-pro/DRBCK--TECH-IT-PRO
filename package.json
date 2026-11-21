@@ -4,7 +4,8 @@
   "description": "Serveur IA de DRBCK TECH.IT.PRO",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "dependencies": {}
 }
