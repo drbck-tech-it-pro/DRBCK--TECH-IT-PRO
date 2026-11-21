@@ -620,6 +620,27 @@ function renderMediaModule(rows, target) {
   });
 }
 
+async function verifyPayment(paymentId, decision) {
+  const actionText = decision === "confirmed" ? "CONFIRMER" : "REFUSER";
+  const note = window.prompt("Après avoir vérifié la transaction dans le compte officiel du fournisseur, indiquez la preuve ou le détail de vérification (8 caractères minimum) :");
+  if (note === null) return;
+  if (note.trim().length < 8) {
+    showMessage("moduleMessage", "Ajoutez une note de vérification suffisamment précise.");
+    return;
+  }
+  if (!window.confirm("Confirmez-vous la décision : " + actionText + " ce paiement ?")) return;
+  try {
+    const result = await apiRequest("/api/admin/payments/" + encodeURIComponent(paymentId) + "/verify", {
+      method: "PATCH",
+      body: JSON.stringify({ decision, verification_note: note.trim() })
+    });
+    showMessage("moduleMessage", result.message || "Paiement traité.", "success");
+    await Promise.all([loadAdminModule("payments"), loadOverview()]);
+  } catch (error) {
+    showMessage("moduleMessage", error.message);
+  }
+}
+
 function renderPaymentsModule(rows, target) {
   target.replaceChildren();
   if (!rows.length) {
@@ -627,7 +648,7 @@ function renderPaymentsModule(rows, target) {
     return;
   }
   const note = document.createElement("p");
-  note.textContent = "Les références soumises par les clients restent en attente. Aucun paiement n'est confirmé automatiquement sans vérification réelle.";
+  note.textContent = "Vérifiez chaque référence dans le compte officiel Airtel Money, M-Pesa ou PayPal avant toute confirmation. La note de vérification est conservée dans l'historique administratif.";
   target.appendChild(note);
   rows.forEach(payment => {
     const card = document.createElement("article");
@@ -642,6 +663,23 @@ function renderPaymentsModule(rows, target) {
     const date = document.createElement("p");
     date.textContent = payment.created_at ? new Date(payment.created_at).toLocaleString("fr-FR") : "";
     card.append(heading, details, reference, date);
+    if (payment.status === "pending") {
+      const confirm = document.createElement("button");
+      confirm.type = "button";
+      confirm.textContent = "Confirmer après vérification";
+      confirm.addEventListener("click", () => verifyPayment(payment.id, "confirmed"));
+      const reject = document.createElement("button");
+      reject.type = "button";
+      reject.className = "secondary";
+      reject.textContent = "Refuser après vérification";
+      reject.addEventListener("click", () => verifyPayment(payment.id, "rejected"));
+      card.append(confirm, reject);
+    } else if (payment.status === "confirmed") {
+      const status = document.createElement("p");
+      status.textContent = "Paiement confirmé le " + (payment.verified_at
+        ? new Date(payment.verified_at).toLocaleString("fr-FR") : "date non disponible");
+      card.appendChild(status);
+    }
     target.appendChild(card);
   });
 }
