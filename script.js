@@ -1,6 +1,6 @@
 // DRBCK TECH.IT.PRO — SERVICES PUBLICS
 const API_BASE = "https://drbck-tech-it-pro.onrender.com";
-const numeroWhatsApp = "243972052103";
+let numeroWhatsApp = "243972052103";
 
 function element(tag, text, className) {
   const node = document.createElement(tag);
@@ -14,6 +14,48 @@ function nettoyerUrlPhoto(value) {
   const match = value.trim().match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
   const url = match ? match[2] : value.trim();
   return /^https?:\/\//i.test(url) ? url : "";
+}
+
+async function chargerParametresPublics() {
+  try {
+    const response = await fetch(`${API_BASE}/api/site-settings`, { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    const settings = data.settings || {};
+    const profile = settings.business_profile || {};
+    const contact = settings.contact || {};
+    const branding = settings.branding || {};
+
+    if (profile.name) {
+      const heading = document.querySelector("header h1");
+      if (heading) heading.textContent = profile.name;
+    }
+    if (profile.slogan) {
+      const slogan = document.querySelector("header p");
+      if (slogan) slogan.textContent = profile.slogan;
+    }
+    if (contact.whatsapp) {
+      const phone = String(contact.whatsapp).replace(/[^0-9]/g, "");
+      if (phone.length >= 8 && phone.length <= 18) numeroWhatsApp = phone;
+    }
+    if (branding.logo_url && String(branding.logo_url).startsWith("https://")) {
+      const logo = document.querySelector("header .logo img");
+      if (logo) logo.src = branding.logo_url;
+    }
+    document.querySelectorAll('a[href*="wa.me"]').forEach(link => {
+      link.href = "https://wa.me/" + numeroWhatsApp;
+    });
+    const contactSection = document.getElementById("contact");
+    if (contactSection) {
+      const paragraphs = contactSection.querySelectorAll("p");
+      if (profile.name && paragraphs[0]) paragraphs[0].textContent = profile.name;
+      if ((profile.city || profile.country) && paragraphs[1]) {
+        paragraphs[1].textContent = [profile.city, profile.country].filter(Boolean).join(", ");
+      }
+    }
+  } catch (error) {
+    console.warn("Paramètres publics indisponibles :", error.message);
+  }
 }
 
 async function chargerServicesPublics() {
@@ -105,7 +147,7 @@ if (whatsappLink) {
   whatsappLink.rel = "noopener noreferrer";
 }
 
-chargerServicesPublics();
+// Les services seront chargés après les paramètres publics.
 
 // --------------------------------------------------
 // PRODUITS PUBLICS — SEULEMENT LES PRODUITS PUBLIES
@@ -339,9 +381,15 @@ async function chargerProduitsPublics() {
   }
 }
 
-chargerProduitsPublics();
 
 
+
+
+async function initialiserSitePublic() {
+  await chargerParametresPublics();
+  await Promise.all([chargerServicesPublics(), chargerProduitsPublics()]);
+}
+initialiserSitePublic();
 
 // ANALYTIQUES DU SITE : identifiant aléatoire limité à la session du navigateur.
 function drbckVisitorId() {
