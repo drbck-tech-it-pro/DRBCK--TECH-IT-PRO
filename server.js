@@ -630,6 +630,52 @@ const server = http.createServer(async (req, res) => {
       // LECTURE DES MODULES ADMIN (DONNEES REELLES)
       // --------------------------------------------
 
+      const paymentMethodMatch = pathname.match(/^\/api\/admin\/payment-methods\/([0-9a-fA-F-]{36})$/);
+      if (paymentMethodMatch && req.method === "PATCH") {
+        const paymentMethodId = paymentMethodMatch[1];
+        const body = await readBody(req);
+        const updates = {};
+        if (Object.prototype.hasOwnProperty.call(body, "enabled")) {
+          if (typeof body.enabled !== "boolean") {
+            sendJSON(res, 400, { success: false, message: "État du moyen de paiement invalide." });
+            return;
+          }
+          updates.enabled = body.enabled;
+        }
+        if (Object.prototype.hasOwnProperty.call(body, "instructions")) {
+          if (typeof body.instructions !== "string" || body.instructions.length > 3000) {
+            sendJSON(res, 400, { success: false, message: "Instructions invalides (3 000 caractères maximum)." });
+            return;
+          }
+          updates.instructions = body.instructions.trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(body, "account_details")) {
+          if (!body.account_details || typeof body.account_details !== "object" || Array.isArray(body.account_details)) {
+            sendJSON(res, 400, { success: false, message: "Les coordonnées doivent être un objet JSON." });
+            return;
+          }
+          updates.account_details = body.account_details;
+        }
+        if (!Object.keys(updates).length) {
+          sendJSON(res, 400, { success: false, message: "Aucune modification reçue." });
+          return;
+        }
+        updates.updated_at = new Date().toISOString();
+        const changed = await supabaseRequest("payment_methods?id=eq." + encodeURIComponent(paymentMethodId), {
+          method: "PATCH", body: updates
+        });
+        if (!Array.isArray(changed) || !changed.length) {
+          sendJSON(res, 404, { success: false, message: "Moyen de paiement introuvable." });
+          return;
+        }
+        await writeAdminHistory(admin, "payment_method.updated", "payment_method", paymentMethodId, {
+          fields: Object.keys(updates).filter(key => key !== "account_details"),
+          accountDetailsUpdated: Object.prototype.hasOwnProperty.call(updates, "account_details")
+        });
+        sendJSON(res, 200, { success: true, paymentMethod: changed[0] });
+        return;
+      }
+
       const readOnlyModules = {
         "/api/admin/products": {
           table: "products",
