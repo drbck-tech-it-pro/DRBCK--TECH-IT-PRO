@@ -79,3 +79,14 @@ test("public product responses never include private file paths", () => {
   const route = server.slice(routeStart, routeEnd);
   assert.doesNotMatch(route, /file_path/);
 });
+
+test("checkout uses a non-nested payment panel and prevents duplicate orders", () => {
+  assert.match(publicScript, /const paymentForm = document\.createElement\("div"\)/);
+  assert.match(publicScript, /paymentSubmit\.addEventListener\("click"/);
+  assert.match(publicScript, /let orderCreated = false/);
+});
+
+test("public API CORS is restricted to the official GitHub Pages origin", () => {
+  assert.match(server, /origin === SITE_ORIGIN/);
+  assert.match(server, /https:\/\/drbck-tech-it-pro\.github\.io/);
+});
