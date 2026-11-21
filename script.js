@@ -244,6 +244,12 @@ async function chargerProduitsPublics() {
       emailInput.type = "email";
       emailInput.placeholder = "E-mail (facultatif)";
       emailInput.maxLength = 180;
+      const addressInput = document.createElement("input");
+      addressInput.name = "delivery_address";
+      addressInput.placeholder = "Adresse complète de livraison";
+      addressInput.maxLength = 500;
+      addressInput.required = produit.product_type === "physical";
+      addressInput.hidden = produit.product_type !== "physical";
       const quantityInput = document.createElement("input");
       quantityInput.name = "quantity";
       quantityInput.type = "number";
@@ -255,7 +261,7 @@ async function chargerProduitsPublics() {
       submitOrder.type = "submit";
       const orderMessage = element("p", "");
       orderMessage.setAttribute("aria-live", "polite");
-      orderForm.append(nameInput, phoneInput, emailInput, quantityInput, submitOrder, orderMessage);
+      orderForm.append(nameInput, phoneInput, emailInput, addressInput, quantityInput, submitOrder, orderMessage);
       orderButton.addEventListener("click", () => {
         orderForm.hidden = !orderForm.hidden;
         if (!orderForm.hidden) nameInput.focus();
@@ -274,6 +280,7 @@ async function chargerProduitsPublics() {
               customer_name: nameInput.value.trim(),
               customer_phone: phoneInput.value.trim(),
               customer_email: emailInput.value.trim(),
+              delivery_address: addressInput.value.trim(),
               quantity: Number(quantityInput.value)
             })
           });
@@ -283,6 +290,7 @@ async function chargerProduitsPublics() {
           nameInput.disabled = true;
           phoneInput.disabled = true;
           emailInput.disabled = true;
+          addressInput.disabled = true;
           quantityInput.disabled = true;
           submitOrder.textContent = "Commande enregistrée";
           orderMessage.textContent = "Commande " + result.order.order_number + " enregistrée. Total : " +
