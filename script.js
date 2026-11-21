@@ -179,6 +179,74 @@ async function chargerProduitsPublics() {
         link.textContent = "Demander la disponibilité";
       }
       card.appendChild(link);
+
+      const orderButton = element("button", "Commander sur le site");
+      orderButton.type = "button";
+      orderButton.className = "btn";
+      const orderForm = document.createElement("form");
+      orderForm.hidden = true;
+      orderForm.className = "product-order-form";
+      const nameInput = document.createElement("input");
+      nameInput.name = "customer_name";
+      nameInput.placeholder = "Votre nom complet";
+      nameInput.required = true;
+      nameInput.maxLength = 120;
+      const phoneInput = document.createElement("input");
+      phoneInput.name = "customer_phone";
+      phoneInput.placeholder = "Votre numéro de téléphone";
+      phoneInput.required = true;
+      phoneInput.maxLength = 40;
+      const emailInput = document.createElement("input");
+      emailInput.name = "customer_email";
+      emailInput.type = "email";
+      emailInput.placeholder = "E-mail (facultatif)";
+      emailInput.maxLength = 180;
+      const quantityInput = document.createElement("input");
+      quantityInput.name = "quantity";
+      quantityInput.type = "number";
+      quantityInput.min = "1";
+      quantityInput.max = "50";
+      quantityInput.value = "1";
+      quantityInput.required = true;
+      const submitOrder = element("button", "Envoyer la commande");
+      submitOrder.type = "submit";
+      const orderMessage = element("p", "");
+      orderMessage.setAttribute("aria-live", "polite");
+      orderForm.append(nameInput, phoneInput, emailInput, quantityInput, submitOrder, orderMessage);
+      orderButton.addEventListener("click", () => {
+        orderForm.hidden = !orderForm.hidden;
+        if (!orderForm.hidden) nameInput.focus();
+      });
+      orderForm.addEventListener("submit", async event => {
+        event.preventDefault();
+        submitOrder.disabled = true;
+        orderMessage.textContent = "Enregistrement de votre commande...";
+        try {
+          const response = await fetch(`${API_BASE}/api/orders`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              product_id: produit.id,
+              customer_name: nameInput.value.trim(),
+              customer_phone: phoneInput.value.trim(),
+              customer_email: emailInput.value.trim(),
+              quantity: Number(quantityInput.value)
+            })
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) throw new Error(result.message || "Impossible d'enregistrer la commande.");
+          orderMessage.textContent = "Commande " + result.order.order_number + " enregistrée. Total : " +
+            Number(result.order.total_amount).toFixed(2) + " " + result.order.currency +
+            ". Paiement en attente de vérification. Notre équipe vous contactera.";
+          orderForm.reset();
+          quantityInput.value = "1";
+        } catch (error) {
+          orderMessage.textContent = error.message;
+        } finally {
+          submitOrder.disabled = false;
+        }
+      });
+      card.append(orderButton, orderForm);
       liste.appendChild(card);
     });
   } catch (error) {
