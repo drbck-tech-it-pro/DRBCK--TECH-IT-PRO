@@ -106,3 +106,8 @@ test("anonymous analytics feed the administrator dashboard", () => {
   assert.match(publicScript, /whatsapp_click/);
   assert.match(admin, /Visites du site/);
 });
+
+test("rate limits use the proxy-provided client address instead of the first spoofable header", () => {
+  assert.match(server, /function getClientIP\(req\)/);
+  assert.match(server, /forwarded\[forwarded\.length - 1\]/);
+});
