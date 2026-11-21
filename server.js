@@ -680,6 +680,29 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/api/site-settings") {
+      const rows = await supabaseRequest("site_settings?select=setting_key,setting_value&setting_key=in.(business_profile,contact,branding,delivery,storefront)");
+      const allowed = {
+        business_profile: ["name", "slogan", "city", "country", "description"],
+        contact: ["whatsapp", "public_email", "phone", "address"],
+        branding: ["logo_url", "primary_color", "secondary_color"],
+        delivery: ["methods", "instructions", "estimated_time"],
+        storefront: ["currency", "allow_website_orders", "allow_whatsapp_orders"]
+      };
+      const settings = {};
+      for (const row of (Array.isArray(rows) ? rows : [])) {
+        if (!allowed[row.setting_key] || !row.setting_value || typeof row.setting_value !== "object") continue;
+        settings[row.setting_key] = {};
+        for (const field of allowed[row.setting_key]) {
+          if (Object.prototype.hasOwnProperty.call(row.setting_value, field)) {
+            settings[row.setting_key][field] = row.setting_value[field];
+          }
+        }
+      }
+      sendJSON(res, 200, { success: true, settings });
+      return;
+    }
+
     // ----------------------------------------------
     // SERVICES PUBLICS
     // ----------------------------------------------
