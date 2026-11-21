@@ -313,6 +313,14 @@ function checkRateLimit(key, maxRequests, windowMs) {
   return record.count <= maxRequests;
 }
 
+function getClientIP(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "")
+    .split(",").map(value => value.trim()).filter(Boolean);
+  // Le proxy ajoute l'adresse réelle du client à la fin de la chaîne.
+  return forwarded.length ? forwarded[forwarded.length - 1] :
+    (req.socket && req.socket.remoteAddress) || "unknown";
+}
+
 // --------------------------------------------------
 // RECUPERATION DES SERVICES PUBLIES
 // --------------------------------------------------
@@ -486,8 +494,7 @@ const server = http.createServer(async (req, res) => {
 
     // ANALYTICS PUBLICS SANS DONNEES PERSONNELLES
     if (req.method === "POST" && pathname === "/api/events") {
-      const clientIP = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
-        req.socket.remoteAddress || "unknown";
+      const clientIP = getClientIP(req);
       if (!checkRateLimit("public-events:" + clientIP, 90, 60 * 1000)) {
         sendJSON(res, 429, { success: false, message: "Trop d'événements envoyés." }); return;
       }
@@ -716,8 +723,7 @@ const server = http.createServer(async (req, res) => {
       req.method === "POST" &&
       pathname === "/api/admin/login"
     ) {
-      const forwardedIP = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
-      const clientIP = forwardedIP || req.socket.remoteAddress || "unknown";
+      const clientIP = getClientIP(req);
       if (!checkRateLimit("admin-login:" + clientIP, 8, 15 * 60 * 1000)) {
         sendJSON(res, 429, {
           success: false,
@@ -1843,10 +1849,7 @@ const server = http.createServer(async (req, res) => {
       req.method === "POST" &&
       pathname === "/api/chat"
     ) {
-      const clientIP =
-        req.headers["x-forwarded-for"] ||
-        req.socket.remoteAddress ||
-        "unknown";
+      const clientIP = getClientIP(req);
 
       if (!checkRateLimit(clientIP, 20, 60 * 1000)) {
         sendJSON(res, 429, {
