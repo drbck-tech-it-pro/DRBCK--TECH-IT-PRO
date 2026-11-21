@@ -735,6 +735,101 @@ const server = http.createServer(async (req, res) => {
       }
 
       // --------------------------------------------
+      // MISE A JOUR SECURISEE DES COMMANDES
+      // --------------------------------------------
+
+      const orderMatch = pathname.match(/^\/api\/admin\/orders\/([0-9a-fA-F-]{36})$/);
+      if (orderMatch && req.method === "PATCH") {
+        const orderId = orderMatch[1];
+        const body = await readBody(req);
+        const updates = {};
+        const allowedOrderStatuses = ["pending", "processing", "completed", "cancelled", "refunded"];
+        const allowedDeliveryStatuses = ["pending", "preparing", "shipped", "delivered", "returned"];
+
+        if (Object.prototype.hasOwnProperty.call(body, "status")) {
+          if (!allowedOrderStatuses.includes(body.status)) {
+            sendJSON(res, 400, { success: false, message: "Statut de commande invalide." });
+            return;
+          }
+          updates.status = body.status;
+        }
+        if (Object.prototype.hasOwnProperty.call(body, "delivery_status")) {
+          if (!allowedDeliveryStatuses.includes(body.delivery_status)) {
+            sendJSON(res, 400, { success: false, message: "Statut de livraison invalide." });
+            return;
+          }
+          updates.delivery_status = body.delivery_status;
+        }
+        if (!Object.keys(updates).length) {
+          sendJSON(res, 400, { success: false, message: "Aucun changement de commande reçu." });
+          return;
+        }
+        updates.updated_at = new Date().toISOString();
+        const updated = await supabaseRequest("orders?id=eq." + encodeURIComponent(orderId), { method: "PATCH", body: updates });
+        await writeAdminHistory(admin, "order.updated", "order", orderId, { fields: Object.keys(updates) });
+        sendJSON(res, 200, { success: true, message: "Commande mise à jour.", order: updated });
+        return;
+      }
+
+      // --------------------------------------------
+      // CREATION D'UNE LIVRAISON
+      // --------------------------------------------
+
+      if (req.method === "POST" && pathname === "/api/admin/shipments") {
+        const body = await readBody(req);
+        const orderId = String(body.order_id || "");
+        if (!/^[0-9a-fA-F-]{36}$/.test(orderId)) {
+          sendJSON(res, 400, { success: false, message: "Identifiant de commande invalide." });
+          return;
+        }
+        const deliveryStatus = body.delivery_status || "pending";
+        if (!["pending", "preparing", "shipped", "delivered", "returned"].includes(deliveryStatus)) {
+          sendJSON(res, 400, { success: false, message: "Statut de livraison invalide." });
+          return;
+        }
+        const shipment = {
+          order_id: orderId,
+          delivery_address: String(body.delivery_address || "").trim() || null,
+          tracking_number: String(body.tracking_number || "").trim() || null,
+          delivery_status: deliveryStatus,
+          notes: String(body.notes || "").trim() || null
+        };
+        const created = await supabaseRequest("shipments", { method: "POST", body: shipment });
+        const item = Array.isArray(created) ? created[0] : created;
+        await writeAdminHistory(admin, "shipment.created", "shipment", item && item.id, { order_id: orderId, delivery_status: deliveryStatus });
+        sendJSON(res, 201, { success: true, message: "Livraison créée.", shipment: item });
+        return;
+      }
+
+      const shipmentMatch = pathname.match(/^\/api\/admin\/shipments\/([0-9a-fA-F-]{36})$/);
+      if (shipmentMatch && req.method === "PATCH") {
+        const shipmentId = shipmentMatch[1];
+        const body = await readBody(req);
+        const updates = {};
+        for (const field of ["delivery_address", "tracking_number", "notes"]) {
+          if (Object.prototype.hasOwnProperty.call(body, field)) {
+            updates[field] = String(body[field] || "").trim() || null;
+          }
+        }
+        if (Object.prototype.hasOwnProperty.call(body, "delivery_status")) {
+          if (!["pending", "preparing", "shipped", "delivered", "returned"].includes(body.delivery_status)) {
+            sendJSON(res, 400, { success: false, message: "Statut de livraison invalide." });
+            return;
+          }
+          updates.delivery_status = body.delivery_status;
+        }
+        if (!Object.keys(updates).length) {
+          sendJSON(res, 400, { success: false, message: "Aucune modification reçue." });
+          return;
+        }
+        updates.updated_at = new Date().toISOString();
+        const updated = await supabaseRequest("shipments?id=eq." + encodeURIComponent(shipmentId), { method: "PATCH", body: updates });
+        await writeAdminHistory(admin, "shipment.updated", "shipment", shipmentId, { fields: Object.keys(updates) });
+        sendJSON(res, 200, { success: true, message: "Livraison modifiée.", shipment: updated });
+        return;
+      }
+
+      // --------------------------------------------
       // GESTION DES PRODUITS (ADMIN)
       // --------------------------------------------
 
