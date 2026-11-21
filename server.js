@@ -986,6 +986,75 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      const paymentVerifyMatch = pathname.match(/^\/api\/admin\/payments\/([0-9a-fA-F-]{36})\/verify$/);
+      if (paymentVerifyMatch && req.method === "PATCH") {
+        const paymentId = paymentVerifyMatch[1];
+        const body = await readBody(req);
+        const decision = String(body.decision || "");
+        const note = String(body.verification_note || "").trim().slice(0, 500);
+        if (!["confirmed", "rejected"].includes(decision) || note.length < 8) {
+          sendJSON(res, 400, { success: false, message: "Choisissez une décision et indiquez une preuve de vérification (8 caractères minimum)." });
+          return;
+        }
+        const payments = await supabaseRequest("payments?select=id,order_id,method,transaction_reference,amount,currency,status& id=eq." +
+          encodeURIComponent(paymentId) + "&limit=1".replace("& ", "&"));
+        if (!Array.isArray(payments) || !payments.length) {
+          sendJSON(res, 404, { success: false, message: "Paiement introuvable." }); return;
+        }
+        const payment = payments[0];
+        if (payment.status !== "pending") {
+          sendJSON(res, 409, { success: false, message: "Ce paiement a déjà été traité." }); return;
+        }
+        if (!payment.transaction_reference || !payment.method) {
+          sendJSON(res, 409, { success: false, message: "Référence ou moyen de paiement manquant." }); return;
+        }
+        const orders = await supabaseRequest("orders?select=id,total_amount,currency,payment_status&id=eq." +
+          encodeURIComponent(payment.order_id) + "&limit=1");
+        if (!Array.isArray(orders) || !orders.length) {
+          sendJSON(res, 404, { success: false, message: "Commande liée introuvable." }); return;
+        }
+        const order = orders[0];
+        if (decision === "confirmed") {
+          const amountMatches = Math.abs(Number(payment.amount) - Number(order.total_amount)) < 0.005;
+          const currencyMatches = String(payment.currency || "USD").toUpperCase() === String(order.currency || "USD").toUpperCase();
+          if (!amountMatches || !currencyMatches) {
+            sendJSON(res, 409, { success: false, message: "Le montant ou la devise du paiement ne correspond pas à la commande." }); return;
+          }
+          if (order.payment_status === "confirmed") {
+            sendJSON(res, 409, { success: false, message: "Cette commande est déjà payée par un autre paiement." }); return;
+          }
+        }
+        const verifiedAt = decision === "confirmed" ? new Date().toISOString() : null;
+        const changed = await supabaseRequest("payments?id=eq." + encodeURIComponent(paymentId) +
+          "&status=eq.pending", { method: "PATCH", body: { status: decision, verified_at: verifiedAt } });
+        if (!Array.isArray(changed) || !changed.length) {
+          sendJSON(res, 409, { success: false, message: "Le paiement a été modifié entre-temps. Actualisez la liste." }); return;
+        }
+        if (decision === "confirmed") {
+          try {
+            const orderChanged = await supabaseRequest("orders?id=eq." + encodeURIComponent(order.id) +
+              "&payment_status=neq.confirmed", {
+                method: "PATCH", body: { payment_status: "confirmed", updated_at: verifiedAt }
+              });
+            if (!Array.isArray(orderChanged) || !orderChanged.length) {
+              throw new Error("La commande a déjà été payée ou modifiée.");
+            }
+          } catch (error) {
+            await supabaseRequest("payments?id=eq." + encodeURIComponent(paymentId) +
+              "&status=eq.confirmed", { method: "PATCH", body: { status: "pending", verified_at: null } }).catch(() => {});
+            sendJSON(res, 409, { success: false, message: error.message || "Impossible de confirmer la commande." }); return;
+          }
+        }
+        await writeAdminHistory(admin, "payment." + decision, "payment", paymentId, {
+          order_id: payment.order_id, method: payment.method,
+          transaction_reference: payment.transaction_reference, verification_note: note
+        });
+        sendJSON(res, 200, { success: true, message: decision === "confirmed"
+          ? "Paiement confirmé après vérification manuelle. La commande est maintenant payée."
+          : "Paiement refusé après vérification.", status: decision });
+        return;
+      }
+
       const readOnlyModules = {
         "/api/admin/products": {
           table: "products",
