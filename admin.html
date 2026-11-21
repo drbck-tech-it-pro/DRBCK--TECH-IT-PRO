@@ -1,432 +1,398 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Administration DRBCK TECH.IT.PRO</title>
-
-<style>
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  padding: 15px;
-  font-family: Arial, sans-serif;
-  background: #0f172a;
-  color: white;
-}
-
-.container {
-  max-width: 750px;
-  margin: 20px auto;
-}
-
-header, .box {
-  background: #1e293b;
-  padding: 20px;
-  border-radius: 12px;
-  margin-bottom: 18px;
-}
-
-h1, h2 {
-  color: #facc15;
-}
-
-input, textarea, button {
-  width: 100%;
-  padding: 12px;
-  margin: 7px 0;
-  border-radius: 7px;
-  border: none;
-  font-size: 16px;
-}
-
-textarea {
-  min-height: 90px;
-}
-
-button {
-  background: #eab308;
-  color: #111827;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-.delete {
-  background: #dc2626;
-  color: white;
-}
-
-.service {
-  background: #334155;
-  padding: 14px;
-  border-radius: 8px;
-  margin: 12px 0;
-  overflow-wrap: anywhere;
-}
-
-.service img {
-  display: block;
-  width: 100%;
-  max-width: 300px;
-  max-height: 220px;
-  object-fit: contain;
-  border-radius: 8px;
-  margin: 10px 0;
-  background: #0f172a;
-}
-
-#dashboard {
-  display: none;
-}
-
-#message, #serviceMessage {
-  color: #facc15;
-}
-
-.logo {
-  display: block;
-  width: 85px;
-  height: 85px;
-  object-fit: contain;
-  margin: 0 auto 15px;
-  border-radius: 50%;
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administration | DRBCK TECH.IT.PRO</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,sans-serif;background:#f1f5f9;color:#172033}
+    header{background:#101c35;color:white;padding:18px}
+    header h1{margin:0;font-size:21px}
+    header p{margin:6px 0 0;color:#cbd5e1}
+    main{max-width:1000px;margin:25px auto;padding:15px}
+    .card{background:white;padding:20px;border-radius:12px;margin-bottom:18px;box-shadow:0 2px 12px #0000000c}
+    h2{margin-top:0;color:#14213d}
+    input,textarea,button{width:100%;padding:12px;margin:7px 0;border-radius:7px;font-size:15px}
+    input,textarea{border:1px solid #cbd5e1}
+    textarea{min-height:85px;resize:vertical}
+    button{border:0;background:#1455c0;color:white;font-weight:bold;cursor:pointer}
+    button:hover{opacity:.9}
+    .danger{background:#c62828}
+    .secondary{background:#475569}
+    .hidden{display:none}
+    .message{padding:10px;border-radius:7px;margin:10px 0;display:none}
+    .error{background:#fee2e2;color:#991b1b}
+    .success{background:#dcfce7;color:#166534}
+    .service{border:1px solid #e2e8f0;padding:14px;border-radius:9px;margin:12px 0}
+    .service h3{margin:0 0 7px}
+    .actions{display:flex;gap:8px}
+    .actions button{flex:1}
+    .topline{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .topline button{width:auto;padding:10px 16px}
+    small{color:#64748b}
+    @media(max-width:550px){.actions{flex-direction:column}.topline{align-items:flex-start;flex-direction:column}.topline button{width:100%}}
+  </style>
 </head>
-
 <body>
-<div class="container">
 
 <header>
-  <img src="logo.jpg" alt="Logo DRBCK" class="logo">
   <h1>DRBCK TECH.IT.PRO</h1>
-  <p>Administration des services</p>
-  <p>Service rapide et fiable à Likasi</p>
+  <p>Administration — Service rapide et fiable à Likasi</p>
 </header>
 
-<div class="box" id="loginBox">
-  <h2>Connexion administrateur</h2>
+<main>
 
-  <form id="loginForm">
-    <input
-      type="password"
-      id="password"
-      placeholder="Mot de passe administrateur"
-      required
-    >
-    <button type="submit">SE CONNECTER</button>
-  </form>
+  <section id="loginSection" class="card">
+    <h2>Connexion administrateur</h2>
+    <div id="loginMessage" class="message"></div>
 
-  <p id="message"></p>
-</div>
+    <form id="loginForm">
+      <label>Adresse e-mail</label>
+      <input id="email" type="email" autocomplete="username" required>
 
-<div id="dashboard">
+      <label>Mot de passe</label>
+      <input id="password" type="password" autocomplete="current-password" required>
 
-  <div class="box">
-    <h2>Ajouter un service</h2>
-
-    <form id="serviceForm">
-      <input id="nom" placeholder="Nom du service" required>
-
-      <textarea
-        id="description"
-        placeholder="Description du service"
-      ></textarea>
-
-      <input id="prix" placeholder="Prix en dollars" required>
-
-      <input
-        id="photo_url"
-        type="url"
-        placeholder="Lien de la photo (facultatif)"
-      >
-
-      <button type="submit">AJOUTER LE SERVICE</button>
+      <button type="submit" id="loginButton">Se connecter</button>
     </form>
+  </section>
 
-    <p id="serviceMessage"></p>
-  </div>
+  <section id="dashboard" class="hidden">
+    <div class="card topline">
+      <div>
+        <h2>Tableau de bord</h2>
+        <small id="adminInfo">Administrateur connecté</small>
+      </div>
+      <button class="danger" onclick="logout()">Déconnexion</button>
+    </div>
 
-  <div class="box">
-    <h2>Liste des services</h2>
-    <div id="servicesList">Chargement...</div>
-  </div>
+    <div class="card">
+      <h2>Gestion des services</h2>
+      <p>Ajoute, modifie ou supprime les services affichés sur le site public.</p>
+      <div id="serviceMessage" class="message"></div>
 
-  <button id="logoutButton" class="delete">
-    SE DÉCONNECTER
-  </button>
+      <form id="serviceForm">
+        <input type="hidden" id="serviceId">
 
-</div>
-</div>
+        <label>Nom du service</label>
+        <input id="serviceName" required>
+
+        <label>Description</label>
+        <textarea id="serviceDescription"></textarea>
+
+        <label>Prix en dollars</label>
+        <input id="servicePrice" placeholder="Exemple : 10 $">
+
+        <label>Adresse de la photo</label>
+        <input id="servicePhoto" type="url" placeholder="https://...">
+
+        <label>
+          <input id="serviceActive" type="checkbox" checked style="width:auto">
+          Service actif et publié
+        </label>
+
+        <button type="submit" id="saveServiceButton">Ajouter le service</button>
+        <button type="button" class="secondary" onclick="resetServiceForm()">Annuler</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="topline">
+        <h2>Liste des services</h2>
+        <button onclick="loadServices()">Actualiser</button>
+      </div>
+      <div id="servicesList">Chargement des services...</div>
+    </div>
+  </section>
+
+</main>
 
 <script>
+"use strict";
+
 const API = "https://drbck-tech-it-pro.onrender.com";
 
-let token = sessionStorage.getItem("adminToken");
+let adminToken = sessionStorage.getItem("drbck_admin_token") || "";
 
-function afficherDashboard() {
-  document.getElementById("loginBox").style.display = "none";
-  document.getElementById("dashboard").style.display = "block";
-  chargerServices();
+const loginSection = document.getElementById("loginSection");
+const dashboard = document.getElementById("dashboard");
+
+function showMessage(id, message, type="error") {
+  const box = document.getElementById(id);
+  box.textContent = message;
+  box.className = "message " + type;
+  box.style.display = "block";
 }
 
-async function connexion(motDePasse) {
-  const response = await fetch(API + "/api/admin/login", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      password: motDePasse
-    })
-  });
+function hideMessage(id) {
+  const box = document.getElementById(id);
+  box.style.display = "none";
+}
 
-  const data = await response.json();
+async function apiRequest(path, options={}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
 
-  if (!response.ok) {
-    throw new Error(data.error || "Connexion impossible.");
+  if (adminToken) {
+    headers.Authorization = "Bearer " + adminToken;
   }
 
-  token = data.token;
-  sessionStorage.setItem("adminToken", token);
-}
-
-async function requeteAdmin(url, options = {}) {
-  const response = await fetch(API + url, {
+  const response = await fetch(API + path, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + token,
-      ...(options.headers || {})
-    }
+    headers
   });
 
-  const data = await response.json();
+  let data;
 
-  if (response.status === 401) {
-    deconnexion();
-    throw new Error("Session expirée. Reconnectez-vous.");
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("Réponse invalide du serveur.");
   }
 
-  if (!response.ok) {
-    throw new Error(data.error || "Une erreur est survenue.");
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "Une erreur est survenue.");
   }
 
   return data;
 }
 
-async function chargerServices() {
-  const liste = document.getElementById("servicesList");
-  liste.textContent = "Chargement des services...";
+// CONNEXION
+
+document.getElementById("loginForm").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const button = document.getElementById("loginButton");
+  button.disabled = true;
+  button.textContent = "Connexion...";
+
+  hideMessage("loginMessage");
 
   try {
-    const services = await requeteAdmin("/api/admin/services");
+    const data = await apiRequest("/api/admin/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: document.getElementById("email").value.trim(),
+        password: document.getElementById("password").value
+      })
+    });
 
-    liste.innerHTML = "";
+    adminToken = data.access_token;
 
-    if (!Array.isArray(services) || services.length === 0) {
-      liste.textContent = "Aucun service enregistré.";
+    if (!adminToken) {
+      throw new Error("Le serveur n'a pas fourni de jeton de connexion.");
+    }
+
+    sessionStorage.setItem("drbck_admin_token", adminToken);
+
+    await openDashboard(data.profile);
+
+  } catch (error) {
+    showMessage("loginMessage", error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Se connecter";
+  }
+});
+
+// VERIFICATION DE LA SESSION
+
+async function checkSession() {
+  if (!adminToken) return;
+
+  try {
+    const data = await apiRequest("/api/admin/me");
+    await openDashboard(data.profile);
+  } catch {
+    logout(false);
+  }
+}
+
+async function openDashboard(profile) {
+  loginSection.classList.add("hidden");
+  dashboard.classList.remove("hidden");
+
+  if (profile && profile.full_name) {
+    document.getElementById("adminInfo").textContent =
+      "Connecté : " + profile.full_name;
+  }
+
+  await loadServices();
+}
+
+// DECONNEXION
+
+function logout(showLogin=true) {
+  adminToken = "";
+  sessionStorage.removeItem("drbck_admin_token");
+
+  dashboard.classList.add("hidden");
+  loginSection.classList.remove("hidden");
+
+  document.getElementById("password").value = "";
+
+  if (showLogin) {
+    showMessage("loginMessage", "Vous êtes déconnecté.", "success");
+  }
+}
+
+// CHARGEMENT DES SERVICES
+
+async function loadServices() {
+  const list = document.getElementById("servicesList");
+  list.textContent = "Chargement des services...";
+
+  try {
+    const data = await apiRequest("/api/admin/services");
+    const services = data.services || [];
+
+    list.innerHTML = "";
+
+    if (!services.length) {
+      list.textContent = "Aucun service enregistré.";
       return;
     }
 
     services.forEach(service => {
-      const bloc = document.createElement("div");
-      bloc.className = "service";
+      const item = document.createElement("div");
+      item.className = "service";
 
-      const titre = document.createElement("h3");
-      titre.textContent = service.nom;
-
-      bloc.appendChild(titre);
-
-      if (service.photo_url) {
-        const image = document.createElement("img");
-        image.src = service.photo_url;
-        image.alt = service.nom;
-        image.loading = "lazy";
-
-        image.onerror = function() {
-          this.style.display = "none";
-        };
-
-        bloc.appendChild(image);
-      }
+      const title = document.createElement("h3");
+      title.textContent = service.nom || "";
 
       const description = document.createElement("p");
-      description.textContent =
-        service.description || "Aucune description";
+      description.textContent = service.description || "Aucune description.";
 
-      const prix = document.createElement("p");
-      prix.textContent = "Prix : " + service.prix;
+      const price = document.createElement("p");
+      price.textContent = "Prix : " + (service.prix || "Non défini");
 
-      const statut = document.createElement("p");
-      statut.textContent = service.actif ? "Actif" : "Inactif";
+      const status = document.createElement("small");
+      status.textContent = service.actif && service.publication_status === "published"
+        ? "Actif et publié"
+        : "Inactif ou non publié";
 
-      const modifier = document.createElement("button");
-      modifier.textContent = "MODIFIER";
-      modifier.onclick = () => modifierService(service);
+      const actions = document.createElement("div");
+      actions.className = "actions";
 
-      const supprimer = document.createElement("button");
-      supprimer.textContent = "SUPPRIMER";
-      supprimer.className = "delete";
-      supprimer.onclick = () => supprimerService(service.id);
+      const edit = document.createElement("button");
+      edit.textContent = "Modifier";
+      edit.onclick = () => editService(service);
 
-      bloc.append(
-        description,
-        prix,
-        statut,
-        modifier,
-        supprimer
-      );
+      const remove = document.createElement("button");
+      remove.textContent = "Supprimer";
+      remove.className = "danger";
+      remove.onclick = () => deleteService(service.id);
 
-      liste.appendChild(bloc);
+      actions.append(edit, remove);
+      item.append(title, description, price, status, actions);
+      list.appendChild(item);
     });
 
   } catch (error) {
-    liste.textContent = error.message;
+    list.textContent = error.message;
   }
 }
 
-document.getElementById("loginForm").addEventListener(
-  "submit",
-  async event => {
-    event.preventDefault();
+// AJOUTER OU MODIFIER UN SERVICE
 
-    const message = document.getElementById("message");
-    message.textContent = "Connexion en cours...";
+document.getElementById("serviceForm").addEventListener("submit", async event => {
+  event.preventDefault();
 
-    try {
-      await connexion(
-        document.getElementById("password").value
-      );
+  const id = document.getElementById("serviceId").value;
+  const active = document.getElementById("serviceActive").checked;
 
-      afficherDashboard();
+  const service = {
+    nom: document.getElementById("serviceName").value.trim(),
+    description: document.getElementById("serviceDescription").value.trim(),
+    prix: document.getElementById("servicePrice").value.trim(),
+    photo_url: document.getElementById("servicePhoto").value.trim() || null,
+    actif: active,
+    publication_status: active ? "published" : "draft"
+  };
 
-    } catch (error) {
-      message.textContent = error.message;
-    }
-  }
-);
-
-document.getElementById("serviceForm").addEventListener(
-  "submit",
-  async event => {
-    event.preventDefault();
-
-    const message = document.getElementById("serviceMessage");
-    message.textContent = "Ajout en cours...";
-
-    try {
-      await requeteAdmin("/api/admin/services", {
-        method: "POST",
-        body: JSON.stringify({
-          nom: document.getElementById("nom").value.trim(),
-          description: document.getElementById("description").value.trim(),
-          prix: document.getElementById("prix").value.trim(),
-          photo_url: document.getElementById("photo_url").value.trim() || null,
-          actif: true
-        })
-      });
-
-      document.getElementById("serviceForm").reset();
-
-      message.textContent = "Service ajouté avec succès.";
-
-      chargerServices();
-
-    } catch (error) {
-      message.textContent = error.message;
-    }
-  }
-);
-
-async function modifierService(service) {
-  const nom = prompt("Nom du service :", service.nom);
-  if (nom === null) return;
-
-  const description = prompt(
-    "Description :",
-    service.description || ""
-  );
-  if (description === null) return;
-
-  const prix = prompt("Prix :", service.prix);
-  if (prix === null) return;
-
-  const photo_url = prompt(
-    "Lien de la photo :",
-    service.photo_url || ""
-  );
-  if (photo_url === null) return;
-
-  const statut = confirm(
-    "Voulez-vous rendre ce service actif ?"
-  );
-
-  try {
-    await requeteAdmin(
-      "/api/admin/services/" + service.id,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          nom,
-          description,
-          prix,
-          photo_url: photo_url.trim() || null,
-          actif: statut
-        })
-      }
-    );
-
-    alert("Service modifié avec succès.");
-    chargerServices();
-
-  } catch (error) {
-    alert(error.message);
-  }
-}
-
-async function supprimerService(id) {
-  if (!confirm("Voulez-vous vraiment supprimer ce service ?")) {
+  if (!service.nom) {
+    showMessage("serviceMessage", "Le nom du service est obligatoire.");
     return;
   }
 
-  try {
-    await requeteAdmin(
-      "/api/admin/services/" + id,
-      {
-        method: "DELETE"
-      }
-    );
+  const button = document.getElementById("saveServiceButton");
+  button.disabled = true;
 
-    alert("Service supprimé.");
-    chargerServices();
+  try {
+    if (id) {
+      await apiRequest("/api/admin/services/" + encodeURIComponent(id), {
+        method: "PATCH",
+        body: JSON.stringify(service)
+      });
+
+      showMessage("serviceMessage", "Service modifié avec succès.", "success");
+    } else {
+      await apiRequest("/api/admin/services", {
+        method: "POST",
+        body: JSON.stringify(service)
+      });
+
+      showMessage("serviceMessage", "Service ajouté avec succès.", "success");
+    }
+
+    resetServiceForm();
+    await loadServices();
 
   } catch (error) {
-    alert(error.message);
+    showMessage("serviceMessage", error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+function editService(service) {
+  document.getElementById("serviceId").value = service.id;
+  document.getElementById("serviceName").value = service.nom || "";
+  document.getElementById("serviceDescription").value = service.description || "";
+  document.getElementById("servicePrice").value = service.prix || "";
+  document.getElementById("servicePhoto").value = service.photo_url || "";
+  document.getElementById("serviceActive").checked =
+    service.actif === true && service.publication_status === "published";
+
+  document.getElementById("saveServiceButton").textContent = "Enregistrer les modifications";
+
+  document.getElementById("serviceForm").scrollIntoView({
+    behavior: "smooth"
+  });
+}
+
+function resetServiceForm() {
+  document.getElementById("serviceForm").reset();
+  document.getElementById("serviceId").value = "";
+  document.getElementById("serviceActive").checked = true;
+  document.getElementById("saveServiceButton").textContent = "Ajouter le service";
+}
+
+// SUPPRIMER UN SERVICE
+
+async function deleteService(id) {
+  if (!confirm("Voulez-vous vraiment supprimer ce service ?")) return;
+
+  try {
+    await apiRequest("/api/admin/services/" + encodeURIComponent(id), {
+      method: "DELETE"
+    });
+
+    showMessage("serviceMessage", "Service supprimé.", "success");
+    await loadServices();
+
+  } catch (error) {
+    showMessage("serviceMessage", error.message);
   }
 }
 
-function deconnexion() {
-  token = null;
-  sessionStorage.removeItem("adminToken");
+// DEMARRAGE
 
-  document.getElementById("dashboard").style.display = "none";
-  document.getElementById("loginBox").style.display = "block";
-  document.getElementById("password").value = "";
-}
-
-document.getElementById("logoutButton").addEventListener(
-  "click",
-  deconnexion
-);
-
-if (token) {
-  afficherDashboard();
-}
+checkSession();
 </script>
 
 </body>
-</html>
+  </html>
