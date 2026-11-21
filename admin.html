@@ -552,7 +552,7 @@ function renderSettingsModule(rows, target) {
     notifications: { email_enabled: false, whatsapp_enabled: false }
   };
   const intro = document.createElement("p");
-  intro.textContent = "Modifiez les paramètres de l'entreprise. Les données sont enregistrées dans Supabase. Gardez la devise en USD.";
+  intro.textContent = "Modifiez les paramètres de l'entreprise. Les données sont enregistrées dans Supabase. Gardez la devise en USD. Les alertes e-mail/WhatsApp nécessitent aussi un fournisseur de notification configuré.";
   target.appendChild(intro);
   Object.entries(defaults).forEach(([key, defaultValue]) => {
     const card = document.createElement("article");
@@ -748,8 +748,11 @@ function renderPaymentsModule(rows, target) {
 
 function renderInvoicesModule(rows, target) {
   target.replaceChildren();
+  const notice = document.createElement("p");
+  notice.textContent = "Les factures PDF sont stockées en privé et téléchargeables ici. L'envoi automatique par e-mail sera activé après connexion d'un fournisseur d'e-mail vérifié.";
+  target.appendChild(notice);
   if (!rows.length) {
-    target.textContent = "Aucune facture enregistrée pour le moment.";
+    target.appendChild(document.createTextNode("Aucune facture enregistrée pour le moment."));
     return;
   }
   rows.forEach(invoice => {
