@@ -469,6 +469,8 @@ async function loadAdminModule(name) {
       renderPaymentMethodsModule(rows, output);
     } else if (name === "invoices") {
       renderInvoicesModule(rows, output);
+    } else if (name === "payments") {
+      renderPaymentsModule(rows, output);
     } else {
       output.textContent = rows.length
         ? JSON.stringify(rows, null, 2)
@@ -480,6 +482,32 @@ async function loadAdminModule(name) {
   }
 }
 
+
+function renderPaymentsModule(rows, target) {
+  target.replaceChildren();
+  if (!rows.length) {
+    target.textContent = "Aucun paiement enregistré pour le moment.";
+    return;
+  }
+  const note = document.createElement("p");
+  note.textContent = "Les références soumises par les clients restent en attente. Aucun paiement n'est confirmé automatiquement sans vérification réelle.";
+  target.appendChild(note);
+  rows.forEach(payment => {
+    const card = document.createElement("article");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = payment.method || "Paiement";
+    const details = document.createElement("p");
+    details.textContent = "Montant : " + Number(payment.amount || 0).toFixed(2) + " " +
+      (payment.currency || "USD") + " · État : " + (payment.status || "pending");
+    const reference = document.createElement("p");
+    reference.textContent = "Référence : " + (payment.transaction_reference || "Non fournie");
+    const date = document.createElement("p");
+    date.textContent = payment.created_at ? new Date(payment.created_at).toLocaleString("fr-FR") : "";
+    card.append(heading, details, reference, date);
+    target.appendChild(card);
+  });
+}
 
 function renderInvoicesModule(rows, target) {
   target.replaceChildren();
