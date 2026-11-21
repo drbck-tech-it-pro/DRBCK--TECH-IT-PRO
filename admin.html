@@ -675,7 +675,36 @@ function renderOrdersModule(rows, target) {
       } catch (error) { showMessage("moduleMessage", error.message); }
     });
 
-    card.append(heading, summary, viewDetails, details, statusLabel, status, deliveryLabel, delivery, save, address, tracking, createShipment);
+    const createInvoice = document.createElement("button");
+    createInvoice.type = "button";
+    createInvoice.className = "secondary";
+    createInvoice.textContent = "Créer / télécharger la facture PDF";
+    createInvoice.addEventListener("click", async () => {
+      createInvoice.disabled = true;
+      createInvoice.textContent = "Préparation de la facture...";
+      try {
+        const result = await apiRequest("/api/admin/orders/" + encodeURIComponent(order.id) + "/invoice", {
+          method: "POST",
+          body: JSON.stringify({})
+        });
+        const link = document.createElement("a");
+        link.href = result.signed_url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Ouvrir la facture " + ((result.invoice && result.invoice.invoice_number) || "PDF");
+        link.className = "invoice-download-link";
+        details.appendChild(link);
+        details.hidden = false;
+        showMessage("moduleMessage", result.message || "Facture prête.", "success");
+      } catch (error) {
+        showMessage("moduleMessage", error.message);
+      } finally {
+        createInvoice.disabled = false;
+        createInvoice.textContent = "Créer / télécharger la facture PDF";
+      }
+    });
+
+    card.append(heading, summary, viewDetails, details, statusLabel, status, deliveryLabel, delivery, save, address, tracking, createShipment, createInvoice);
     target.append(card);
   });
 }
