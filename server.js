@@ -601,6 +601,24 @@ const server = http.createServer(async (req, res) => {
           select: "id,admin_id,action,target_type,target_id,details,created_at",
           order: "created_at.desc",
           key: "history"
+        },
+        "/api/admin/shipments": {
+          table: "shipments",
+          select: "id,order_id,delivery_address,tracking_number,delivery_status,notes,created_at,updated_at",
+          order: "created_at.desc",
+          key: "shipments"
+        },
+        "/api/admin/payment-methods": {
+          table: "payment_methods",
+          select: "id,name,account_details,instructions,enabled,created_at,updated_at",
+          order: "created_at.desc",
+          key: "paymentMethods"
+        },
+        "/api/admin/events": {
+          table: "site_events",
+          select: "id,visitor_id,event_type,page_path,product_id,metadata,created_at",
+          order: "created_at.desc",
+          key: "events"
         }
       };
 
