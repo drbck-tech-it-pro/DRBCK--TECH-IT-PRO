@@ -143,6 +143,24 @@ async function supabaseRequest(path, options = {}) {
   return data;
 }
 
+async function writeAdminHistory(admin, action, targetType, targetId, details = {}) {
+  try {
+    await supabaseRequest("admin_history", {
+      method: "POST",
+      body: {
+        admin_id: admin && admin.profile ? admin.profile.user_id : null,
+        action,
+        target_type: targetType,
+        target_id: targetId ? String(targetId) : null,
+        details
+      },
+      prefer: "return=minimal"
+    });
+  } catch (error) {
+    console.error("Échec journalisation administrative :", error.message);
+  }
+}
+
 // --------------------------------------------------
 // AUTHENTIFICATION SUPABASE
 // --------------------------------------------------
@@ -714,6 +732,116 @@ const server = http.createServer(async (req, res) => {
           sourceRowsLimit: 1000
         });
         return;
+      }
+
+      // --------------------------------------------
+      // GESTION DES PRODUITS (ADMIN)
+      // --------------------------------------------
+
+      if (req.method === "POST" && pathname === "/api/admin/products") {
+        const body = await readBody(req);
+        const name = String(body.name || "").trim();
+        const price = Number(body.price);
+        const productType = body.product_type || "digital";
+        const status = body.publication_status || "draft";
+        const allowedStatuses = ["draft", "pending", "approved", "published", "rejected"];
+
+        if (!name || !Number.isFinite(price) || price < 0) {
+          sendJSON(res, 400, { success: false, message: "Nom et prix valide obligatoires." });
+          return;
+        }
+        if (!["digital", "physical"].includes(productType) || !allowedStatuses.includes(status)) {
+          sendJSON(res, 400, { success: false, message: "Type ou statut de publication invalide." });
+          return;
+        }
+        const stock = body.stock === null || body.stock === undefined || body.stock === ""
+          ? null : Number(body.stock);
+        if (stock !== null && (!Number.isInteger(stock) || stock < 0)) {
+          sendJSON(res, 400, { success: false, message: "Le stock doit être un entier positif ou nul." });
+          return;
+        }
+
+        const product = {
+          name,
+          description: String(body.description || "").trim(),
+          price,
+          currency: "USD",
+          product_type: productType,
+          image_url: body.image_url ? String(body.image_url).trim() : null,
+          file_path: body.file_path ? String(body.file_path).trim() : null,
+          stock,
+          active: status === "published" && body.active === true,
+          publication_status: status
+        };
+        const created = await supabaseRequest("products", { method: "POST", body: product });
+        const item = Array.isArray(created) ? created[0] : created;
+        await writeAdminHistory(admin, "product.created", "product", item && item.id, { name, publication_status: status });
+        sendJSON(res, 201, { success: true, message: "Produit créé.", product: item });
+        return;
+      }
+
+      const productMatch = pathname.match(/^\/api\/admin\/products\/([0-9a-fA-F-]{36})$/);
+      if (productMatch) {
+        const productId = productMatch[1];
+
+        if (req.method === "PATCH") {
+          const body = await readBody(req);
+          const updates = {};
+          const allowed = ["name", "description", "price", "product_type", "image_url", "file_path", "stock", "publication_status", "active"];
+          for (const field of allowed) {
+            if (Object.prototype.hasOwnProperty.call(body, field)) updates[field] = body[field];
+          }
+          if (Object.keys(updates).length === 0) {
+            sendJSON(res, 400, { success: false, message: "Aucune modification reçue." });
+            return;
+          }
+          if (Object.prototype.hasOwnProperty.call(updates, "name")) {
+            updates.name = String(updates.name || "").trim();
+            if (!updates.name) {
+              sendJSON(res, 400, { success: false, message: "Le nom du produit est obligatoire." });
+              return;
+            }
+          }
+          if (Object.prototype.hasOwnProperty.call(updates, "price")) {
+            updates.price = Number(updates.price);
+            if (!Number.isFinite(updates.price) || updates.price < 0) {
+              sendJSON(res, 400, { success: false, message: "Prix invalide." });
+              return;
+            }
+          }
+          if (Object.prototype.hasOwnProperty.call(updates, "stock") && updates.stock !== null && updates.stock !== "") {
+            updates.stock = Number(updates.stock);
+            if (!Number.isInteger(updates.stock) || updates.stock < 0) {
+              sendJSON(res, 400, { success: false, message: "Stock invalide." });
+              return;
+            }
+          }
+          if (Object.prototype.hasOwnProperty.call(updates, "product_type") && !["digital", "physical"].includes(updates.product_type)) {
+            sendJSON(res, 400, { success: false, message: "Type de produit invalide." });
+            return;
+          }
+          if (Object.prototype.hasOwnProperty.call(updates, "publication_status") && !["draft", "pending", "approved", "published", "rejected"].includes(updates.publication_status)) {
+            sendJSON(res, 400, { success: false, message: "Statut de publication invalide." });
+            return;
+          }
+          if (updates.publication_status && updates.publication_status !== "published") updates.active = false;
+          if (updates.publication_status === "published" && !Object.prototype.hasOwnProperty.call(updates, "active")) updates.active = true;
+          if (Object.prototype.hasOwnProperty.call(updates, "active") && updates.active === true && updates.publication_status && updates.publication_status !== "published") {
+            sendJSON(res, 400, { success: false, message: "Un produit doit être publié pour être activé." });
+            return;
+          }
+          const updated = await supabaseRequest("products?id=eq." + encodeURIComponent(productId), { method: "PATCH", body: updates });
+          await writeAdminHistory(admin, "product.updated", "product", productId, { fields: Object.keys(updates) });
+          sendJSON(res, 200, { success: true, message: "Produit modifié.", product: updated });
+          return;
+        }
+
+        if (req.method === "DELETE") {
+          await supabaseRequest("products?id=eq." + encodeURIComponent(productId), { method: "DELETE", prefer: "return=minimal" });
+          await writeAdminHistory(admin, "product.deleted", "product", productId);
+          sendJSON(res, 200, { success: true, message: "Produit supprimé." });
+          return;
+        }
       }
 
       // --------------------------------------------
