@@ -835,6 +835,34 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // RENOUVELLEMENT DU JETON SUPABASE AUTH
+    if (req.method === "POST" && pathname === "/api/admin/refresh") {
+      if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+        sendJSON(res, 503, { success: false, message: "Configuration Supabase Auth manquante." }); return;
+      }
+      const body = await readBody(req);
+      const refreshToken = String(body.refresh_token || "").trim();
+      if (!refreshToken || refreshToken.length > 4096) {
+        sendJSON(res, 400, { success: false, message: "Jeton de renouvellement invalide." }); return;
+      }
+      const refreshed = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token", {
+        method: "POST",
+        headers: { "apikey": SUPABASE_PUBLISHABLE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+      const authData = await refreshed.json();
+      if (!refreshed.ok || !authData.access_token || !authData.refresh_token) {
+        sendJSON(res, 401, { success: false, message: "Session expirée. Veuillez vous reconnecter." }); return;
+      }
+      const admin = await verifyAdmin(authData.access_token);
+      if (!admin) {
+        sendJSON(res, 403, { success: false, message: "Compte administrateur désactivé ou non autorisé." }); return;
+      }
+      sendJSON(res, 200, { success: true, access_token: authData.access_token,
+        refresh_token: authData.refresh_token, expires_in: authData.expires_in, profile: admin.profile });
+      return;
+    }
+
     // ----------------------------------------------
     // VERIFICATION POUR LES AUTRES ROUTES ADMIN
     // ----------------------------------------------
