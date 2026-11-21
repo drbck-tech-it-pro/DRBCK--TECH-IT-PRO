@@ -463,6 +463,8 @@ async function loadAdminModule(name) {
     const rows = data[module.field] || [];
     if (name === "orders") {
       renderOrdersModule(rows, output);
+    } else if (name === "paymentMethods") {
+      renderPaymentMethodsModule(rows, output);
     } else {
       output.textContent = rows.length
         ? JSON.stringify(rows, null, 2)
@@ -474,6 +476,66 @@ async function loadAdminModule(name) {
   }
 }
 
+
+function renderPaymentMethodsModule(rows, target) {
+  target.replaceChildren();
+  if (!rows.length) {
+    target.textContent = "Aucun moyen de paiement configuré dans Supabase.";
+    return;
+  }
+  rows.forEach(method => {
+    const card = document.createElement("div");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = method.name || "Moyen de paiement";
+    const enabledLabel = document.createElement("label");
+    const enabled = document.createElement("input");
+    enabled.type = "checkbox";
+    enabled.checked = method.enabled === true;
+    enabledLabel.append(enabled, document.createTextNode(" Activé sur le site"));
+    const instructionLabel = document.createElement("label");
+    instructionLabel.textContent = "Instructions affichées au client";
+    const instructions = document.createElement("textarea");
+    instructions.rows = 3;
+    instructions.maxLength = 3000;
+    instructions.value = method.instructions || "";
+    const accountLabel = document.createElement("label");
+    accountLabel.textContent = "Coordonnées du compte (JSON)";
+    const account = document.createElement("textarea");
+    account.rows = 4;
+    account.spellcheck = false;
+    account.value = JSON.stringify(method.account_details || {}, null, 2);
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "Enregistrer ce moyen de paiement";
+    save.addEventListener("click", async () => {
+      let accountDetails;
+      try {
+        accountDetails = JSON.parse(account.value || "{}");
+        if (!accountDetails || typeof accountDetails !== "object" || Array.isArray(accountDetails)) {
+          throw new Error("Un objet JSON est requis.");
+        }
+      } catch (error) {
+        showMessage("moduleMessage", "Coordonnées JSON invalides : " + error.message);
+        return;
+      }
+      save.disabled = true;
+      try {
+        await apiRequest("/api/admin/payment-methods/" + encodeURIComponent(method.id), {
+          method: "PATCH",
+          body: JSON.stringify({ enabled: enabled.checked, instructions: instructions.value, account_details: accountDetails })
+        });
+        showMessage("moduleMessage", "Moyen de paiement enregistré.", "success");
+      } catch (error) {
+        showMessage("moduleMessage", error.message);
+      } finally {
+        save.disabled = false;
+      }
+    });
+    card.append(heading, enabledLabel, instructionLabel, instructions, accountLabel, account, save);
+    target.append(card);
+  });
+}
 
 function renderOrdersModule(rows, target) {
   target.replaceChildren();
