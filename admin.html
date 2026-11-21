@@ -1054,6 +1054,8 @@ async function loadOverview() {
       ["Paiements en attente", stats.pendingPayments],
       ["Médiathèque", stats.media],
       ["Factures", stats.invoices],
+      ["Visites du site (échantillon)", stats.siteVisits],
+      ["Visiteurs uniques (échantillon)", stats.uniqueVisitors],
       ["Montant confirmé", Number(stats.confirmedAmount || 0).toLocaleString("fr-FR") + " $"]
     ];
 
