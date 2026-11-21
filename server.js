@@ -529,22 +529,48 @@ const server = http.createServer(async (req, res) => {
       const total = Math.round(unitPrice * quantity * 100) / 100;
       const orderNumber = "DRBCK-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") +
         "-" + crypto.randomBytes(4).toString("hex").toUpperCase();
-      const created = await supabaseRequest("orders", { method: "POST", body: {
-        order_number: orderNumber, customer_name: customerName,
-        customer_email: customerEmail || null, customer_phone: customerPhone,
-        source: "website", total_amount: total, currency: product.currency || "USD",
-        status: "pending", payment_status: "pending", delivery_status: "pending"
-      }});
-      const order = Array.isArray(created) ? created[0] : created;
+      let reservedStock = null;
+      if (product.stock !== null && product.stock !== undefined) {
+        const stockBefore = Number(product.stock);
+        const stockAfter = stockBefore - quantity;
+        const reserved = await supabaseRequest("products?id=eq." + encodeURIComponent(product.id) +
+          "&stock=eq." + encodeURIComponent(String(stockBefore)) +
+          "&active=eq.true&publication_status=eq.published", {
+            method: "PATCH", body: { stock: stockAfter }
+          });
+        if (!Array.isArray(reserved) || !reserved.length) {
+          sendJSON(res, 409, { success: false, message: "Le stock vient de changer. Actualisez la page et réessayez." });
+          return;
+        }
+        reservedStock = { before: stockBefore, after: stockAfter };
+      }
+
+      let order = null;
       try {
+        const created = await supabaseRequest("orders", { method: "POST", body: {
+          order_number: orderNumber, customer_name: customerName,
+          customer_email: customerEmail || null, customer_phone: customerPhone,
+          source: "website", total_amount: total, currency: product.currency || "USD",
+          status: "pending", payment_status: "pending", delivery_status: "pending"
+        }});
+        order = Array.isArray(created) ? created[0] : created;
+        if (!order || !order.id) throw new Error("La commande n'a pas pu être créée.");
         await supabaseRequest("order_items", { method: "POST", body: {
           order_id: order.id, product_id: product.id, item_name: product.name,
           quantity, unit_price: unitPrice, total_price: total
         }});
       } catch (error) {
-        await supabaseRequest("orders?id=eq." + encodeURIComponent(order.id), {
-          method: "DELETE", prefer: "return=minimal"
-        }).catch(() => {});
+        if (order && order.id) {
+          await supabaseRequest("orders?id=eq." + encodeURIComponent(order.id), {
+            method: "DELETE", prefer: "return=minimal"
+          }).catch(() => {});
+        }
+        if (reservedStock) {
+          await supabaseRequest("products?id=eq." + encodeURIComponent(product.id) +
+            "&stock=eq." + encodeURIComponent(String(reservedStock.after)), {
+              method: "PATCH", body: { stock: reservedStock.before }
+            }).catch(() => {});
+        }
         throw error;
       }
       sendJSON(res, 201, { success: true, message: "Commande enregistrée. Le paiement reste en attente jusqu'à sa vérification par DRBCK TECH.IT.PRO.",
