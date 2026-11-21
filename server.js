@@ -583,9 +583,11 @@ const server = http.createServer(async (req, res) => {
       if (!reference || reference.length < 4) {
         sendJSON(res, 400, { success: false, message: "Référence de transaction obligatoire." }); return;
       }
-      const [orders, methods] = await Promise.all([
+      const [orders, methods, duplicateReferences] = await Promise.all([
         supabaseRequest("orders?select=id,total_amount,currency,payment_status&id=eq." + encodeURIComponent(orderId) + "&limit=1"),
-        supabaseRequest("payment_methods?select=name,enabled&enabled=eq.true")
+        supabaseRequest("payment_methods?select=name,enabled&enabled=eq.true"),
+        supabaseRequest("payments?select=id&method=eq." + encodeURIComponent(method) +
+          "&transaction_reference=eq." + encodeURIComponent(reference) + "&limit=1")
       ]);
       if (!Array.isArray(orders) || !orders.length) {
         sendJSON(res, 404, { success: false, message: "Commande introuvable." }); return;
@@ -596,6 +598,9 @@ const server = http.createServer(async (req, res) => {
       }
       if (!Array.isArray(methods) || !methods.some(row => row.name === method && row.enabled === true)) {
         sendJSON(res, 400, { success: false, message: "Moyen de paiement indisponible." }); return;
+      }
+      if (Array.isArray(duplicateReferences) && duplicateReferences.length) {
+        sendJSON(res, 409, { success: false, message: "Cette référence de transaction a déjà été soumise." }); return;
       }
       const created = await supabaseRequest("payments", { method: "POST", body: {
         order_id: orderId, method, transaction_reference: reference,
