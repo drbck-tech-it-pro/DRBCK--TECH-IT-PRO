@@ -260,17 +260,32 @@ async function openDashboard(profile) {
 
 // DECONNEXION
 
-function logout(showLogin=true) {
+async function logout(showLogin=true) {
+  let revoked = false;
+
+  if (adminToken) {
+    try {
+      await apiRequest("/api/admin/logout", { method: "POST" });
+      revoked = true;
+    } catch (error) {
+      console.error("Révocation de session impossible :", error.message);
+    }
+  }
+
   adminToken = "";
   sessionStorage.removeItem("drbck_admin_token");
-
   dashboard.classList.add("hidden");
   loginSection.classList.remove("hidden");
-
   document.getElementById("password").value = "";
 
   if (showLogin) {
-    showMessage("loginMessage", "Vous êtes déconnecté.", "success");
+    showMessage(
+      "loginMessage",
+      revoked
+        ? "Session révoquée. Vous êtes déconnecté."
+        : "Jeton local effacé. La révocation distante n'a pas pu être confirmée.",
+      revoked ? "success" : "error"
+    );
   }
 }
 
