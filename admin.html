@@ -171,7 +171,7 @@
       </div>
       <div id="moduleMessage" class="message"></div>
       <h3 id="moduleTitle">Sélectionne une rubrique</h3>
-      <pre id="moduleData" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;max-height:480px;overflow:auto">Les données s'afficheront ici après sélection.</pre>
+      <div id="moduleData" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;max-height:480px;overflow:auto">Les données s'afficheront ici après sélection.</div>
     </div>
   </section>
 
@@ -461,13 +461,84 @@ async function loadAdminModule(name) {
   try {
     const data = await apiRequest(module.path);
     const rows = data[module.field] || [];
-    output.textContent = rows.length
-      ? JSON.stringify(rows, null, 2)
-      : "Aucune donnée enregistrée pour le moment.";
+    if (name === "orders") {
+      renderOrdersModule(rows, output);
+    } else {
+      output.textContent = rows.length
+        ? JSON.stringify(rows, null, 2)
+        : "Aucune donnée enregistrée pour le moment.";
+    }
   } catch (error) {
     output.textContent = "Impossible de charger cette rubrique.";
     showMessage("moduleMessage", error.message);
   }
+}
+
+
+function renderOrdersModule(rows, target) {
+  target.replaceChildren();
+  if (!rows.length) {
+    target.textContent = "Aucune commande enregistrée.";
+    return;
+  }
+  const orderStates = ["pending", "processing", "completed", "cancelled", "refunded"];
+  const deliveryStates = ["pending", "preparing", "shipped", "delivered", "returned"];
+  rows.forEach(order => {
+    const card = document.createElement("div");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = (order.order_number || order.id) + " — " + (order.customer_name || "Client");
+    const summary = document.createElement("p");
+    summary.textContent = Number(order.total_amount || 0).toFixed(2) + " " + (order.currency || "USD") +
+      " · Paiement : " + (order.payment_status || "pending") + " · Source : " + (order.source || "website");
+    const statusLabel = document.createElement("label");
+    statusLabel.textContent = "État de la commande";
+    const status = document.createElement("select");
+    orderStates.forEach(value => {
+      const option = document.createElement("option");
+      option.value = value; option.textContent = value; status.append(option);
+    });
+    status.value = order.status || "pending";
+    const deliveryLabel = document.createElement("label");
+    deliveryLabel.textContent = "État de la livraison";
+    const delivery = document.createElement("select");
+    deliveryStates.forEach(value => {
+      const option = document.createElement("option");
+      option.value = value; option.textContent = value; delivery.append(option);
+    });
+    delivery.value = order.delivery_status || "pending";
+    const save = document.createElement("button");
+    save.type = "button"; save.textContent = "Enregistrer les états";
+    save.addEventListener("click", async () => {
+      try {
+        await apiRequest("/api/admin/orders/" + encodeURIComponent(order.id), {
+          method: "PATCH",
+          body: JSON.stringify({ status: status.value, delivery_status: delivery.value })
+        });
+        showMessage("moduleMessage", "Commande mise à jour.", "success");
+        await loadOverview();
+      } catch (error) { showMessage("moduleMessage", error.message); }
+    });
+    const address = document.createElement("input");
+    address.placeholder = "Adresse de livraison";
+    const tracking = document.createElement("input");
+    tracking.placeholder = "Numéro de suivi";
+    const createShipment = document.createElement("button");
+    createShipment.type = "button";
+    createShipment.className = "secondary";
+    createShipment.textContent = "Créer une fiche de livraison";
+    createShipment.addEventListener("click", async () => {
+      try {
+        await apiRequest("/api/admin/shipments", {
+          method: "POST",
+          body: JSON.stringify({ order_id: order.id, delivery_address: address.value, tracking_number: tracking.value, delivery_status: delivery.value })
+        });
+        showMessage("moduleMessage", "Fiche de livraison créée.", "success");
+      } catch (error) { showMessage("moduleMessage", error.message); }
+    });
+    card.append(heading, summary, statusLabel, status, deliveryLabel, delivery, save, address, tracking, createShipment);
+    target.append(card);
+  });
 }
 
 // CHARGEMENT DES INDICATEURS REELS
