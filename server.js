@@ -548,6 +548,67 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+
+    // ----------------------------------------------
+    // MOYENS DE PAIEMENT PUBLICS (CHAMPS AUTORISES)
+    // ----------------------------------------------
+    if (req.method === "GET" && pathname === "/api/payment-methods") {
+      const rows = await supabaseRequest("payment_methods?select=name,account_details,instructions&enabled=eq.true&order=created_at.asc");
+      const methods = (Array.isArray(rows) ? rows : []).map(row => {
+        const name = String(row.name || "");
+        const details = row.account_details && typeof row.account_details === "object" ? row.account_details : {};
+        let account = {};
+        if (name === "Airtel Money" || name === "M-Pesa") account.phone = String(details.phone || "");
+        if (name === "PayPal") account.email = String(details.email || "");
+        return { name, account_details: account, instructions: String(row.instructions || "").slice(0, 1000) };
+      });
+      sendJSON(res, 200, { success: true, payment_methods: methods });
+      return;
+    }
+
+    // ----------------------------------------------
+    // ENREGISTRER UNE REFERENCE DE PAIEMENT CLIENT
+    // ----------------------------------------------
+    const paymentReferenceMatch = pathname.match(new RegExp("^/api/orders/([0-9a-fA-F-]{36})/payment-reference$"));
+    if (req.method === "POST" && paymentReferenceMatch) {
+      const clientIP = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
+        req.socket.remoteAddress || "unknown";
+      if (!checkRateLimit("payment-reference:" + clientIP, 10, 60 * 60 * 1000)) {
+        sendJSON(res, 429, { success: false, message: "Trop de tentatives. Réessayez plus tard." }); return;
+      }
+      const orderId = paymentReferenceMatch[1];
+      const body = await readBody(req);
+      const method = String(body.method || "").trim();
+      const reference = String(body.transaction_reference || "").trim().slice(0, 120);
+      if (!reference || reference.length < 4) {
+        sendJSON(res, 400, { success: false, message: "Référence de transaction obligatoire." }); return;
+      }
+      const [orders, methods] = await Promise.all([
+        supabaseRequest("orders?select=id,total_amount,currency,payment_status&id=eq." + encodeURIComponent(orderId) + "&limit=1"),
+        supabaseRequest("payment_methods?select=name,enabled&enabled=eq.true")
+      ]);
+      if (!Array.isArray(orders) || !orders.length) {
+        sendJSON(res, 404, { success: false, message: "Commande introuvable." }); return;
+      }
+      const order = orders[0];
+      if (order.payment_status === "confirmed") {
+        sendJSON(res, 409, { success: false, message: "Cette commande est déjà payée." }); return;
+      }
+      if (!Array.isArray(methods) || !methods.some(row => row.name === method && row.enabled === true)) {
+        sendJSON(res, 400, { success: false, message: "Moyen de paiement indisponible." }); return;
+      }
+      const created = await supabaseRequest("payments", { method: "POST", body: {
+        order_id: orderId, method, transaction_reference: reference,
+        amount: Number(order.total_amount), currency: order.currency || "USD",
+        status: "pending", verified_at: null
+      }});
+      const payment = Array.isArray(created) ? created[0] : created;
+      sendJSON(res, 201, { success: true, message: "Référence enregistrée. Le paiement reste en attente jusqu'à vérification réelle.", payment: {
+        id: payment && payment.id, status: "pending", method
+      }});
+      return;
+    }
+
     // ----------------------------------------------
     // SERVICES PUBLICS
     // ----------------------------------------------
