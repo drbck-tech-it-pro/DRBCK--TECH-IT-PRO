@@ -996,8 +996,8 @@ const server = http.createServer(async (req, res) => {
           sendJSON(res, 400, { success: false, message: "Choisissez une décision et indiquez une preuve de vérification (8 caractères minimum)." });
           return;
         }
-        const payments = await supabaseRequest("payments?select=id,order_id,method,transaction_reference,amount,currency,status& id=eq." +
-          encodeURIComponent(paymentId) + "&limit=1".replace("& ", "&"));
+        const payments = await supabaseRequest("payments?select=id,order_id,method,transaction_reference,amount,currency,status&id=eq." +
+          encodeURIComponent(paymentId) + "&limit=1");
         if (!Array.isArray(payments) || !payments.length) {
           sendJSON(res, 404, { success: false, message: "Paiement introuvable." }); return;
         }
