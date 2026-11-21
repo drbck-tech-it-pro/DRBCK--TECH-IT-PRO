@@ -478,6 +478,76 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+
+    // ----------------------------------------------
+    // COMMANDE PUBLIQUE DE PRODUIT (SANS COMPTE CLIENT)
+    // ----------------------------------------------
+    if (req.method === "POST" && pathname === "/api/orders") {
+      const clientIP = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() ||
+        req.socket.remoteAddress || "unknown";
+      if (!checkRateLimit("public-order:" + clientIP, 6, 60 * 60 * 1000)) {
+        sendJSON(res, 429, { success: false, message: "Trop de commandes envoyées. Réessayez plus tard." });
+        return;
+      }
+      const body = await readBody(req);
+      const productId = String(body.product_id || "");
+      const customerName = String(body.customer_name || "").trim().slice(0, 120);
+      const customerPhone = String(body.customer_phone || "").trim().slice(0, 40);
+      const customerEmail = String(body.customer_email || "").trim().slice(0, 180);
+      const quantity = Number(body.quantity);
+      if (!/^[0-9a-fA-F-]{36}$/.test(productId) || !customerName || !customerPhone ||
+          !Number.isInteger(quantity) || quantity < 1 || quantity > 50) {
+        sendJSON(res, 400, { success: false, message: "Produit, nom, téléphone et quantité valide sont obligatoires." });
+        return;
+      }
+      if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+        sendJSON(res, 400, { success: false, message: "Adresse e-mail invalide." });
+        return;
+      }
+      const products = await supabaseRequest("products?select=id,name,price,currency,product_type,stock,active,publication_status&id=eq." +
+        encodeURIComponent(productId) + "&limit=1");
+      if (!Array.isArray(products) || !products.length || products[0].active !== true ||
+          products[0].publication_status !== "published") {
+        sendJSON(res, 404, { success: false, message: "Ce produit n'est plus disponible." });
+        return;
+      }
+      const product = products[0];
+      if (product.stock !== null && product.stock !== undefined && Number(product.stock) < quantity) {
+        sendJSON(res, 409, { success: false, message: "Stock insuffisant. Contactez-nous pour vérifier la disponibilité." });
+        return;
+      }
+      const unitPrice = Number(product.price);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+        sendJSON(res, 409, { success: false, message: "Le prix de ce produit doit être vérifié par notre équipe." });
+        return;
+      }
+      const total = Math.round(unitPrice * quantity * 100) / 100;
+      const orderNumber = "DRBCK-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") +
+        "-" + crypto.randomBytes(4).toString("hex").toUpperCase();
+      const created = await supabaseRequest("orders", { method: "POST", body: {
+        order_number: orderNumber, customer_name: customerName,
+        customer_email: customerEmail || null, customer_phone: customerPhone,
+        source: "website", total_amount: total, currency: product.currency || "USD",
+        status: "pending", payment_status: "pending", delivery_status: "pending"
+      }});
+      const order = Array.isArray(created) ? created[0] : created;
+      try {
+        await supabaseRequest("order_items", { method: "POST", body: {
+          order_id: order.id, product_id: product.id, item_name: product.name,
+          quantity, unit_price: unitPrice, total_price: total
+        }});
+      } catch (error) {
+        await supabaseRequest("orders?id=eq." + encodeURIComponent(order.id), {
+          method: "DELETE", prefer: "return=minimal"
+        }).catch(() => {});
+        throw error;
+      }
+      sendJSON(res, 201, { success: true, message: "Commande enregistrée. Le paiement reste en attente jusqu'à sa vérification par DRBCK TECH.IT.PRO.",
+        order: { id: order.id, order_number: orderNumber, total_amount: total,
+          currency: product.currency || "USD", payment_status: "pending" } });
+      return;
+    }
+
     // ----------------------------------------------
     // SERVICES PUBLICS
     // ----------------------------------------------
