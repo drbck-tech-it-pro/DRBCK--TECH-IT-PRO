@@ -220,6 +220,7 @@ async function chargerProduitsPublics() {
       orderForm.addEventListener("submit", async event => {
         event.preventDefault();
         submitOrder.disabled = true;
+        let orderCreated = false;
         orderMessage.textContent = "Enregistrement de votre commande...";
         try {
           const response = await fetch(`${API_BASE}/api/orders`, {
@@ -235,6 +236,12 @@ async function chargerProduitsPublics() {
           });
           const result = await response.json();
           if (!response.ok || !result.success) throw new Error(result.message || "Impossible d'enregistrer la commande.");
+          orderCreated = true;
+          nameInput.disabled = true;
+          phoneInput.disabled = true;
+          emailInput.disabled = true;
+          quantityInput.disabled = true;
+          submitOrder.textContent = "Commande enregistrée";
           orderMessage.textContent = "Commande " + result.order.order_number + " enregistrée. Total : " +
             Number(result.order.total_amount).toFixed(2) + " " + result.order.currency +
             ". Paiement en attente de vérification. Notre équipe vous contactera.";
@@ -246,7 +253,7 @@ async function chargerProduitsPublics() {
           paymentPanel.className = "payment-reference-panel";
           paymentPanel.appendChild(element("h4", "Effectuer le paiement"));
           const paymentInfo = element("p", "Chargement des moyens de paiement...");
-          const paymentForm = document.createElement("form");
+          const paymentForm = document.createElement("div");
           const methodSelect = document.createElement("select");
           methodSelect.required = true;
           const referenceInput = document.createElement("input");
@@ -254,7 +261,7 @@ async function chargerProduitsPublics() {
           referenceInput.required = true;
           referenceInput.maxLength = 120;
           const paymentSubmit = element("button", "Envoyer la référence");
-          paymentSubmit.type = "submit";
+          paymentSubmit.type = "button";
           const paymentStatus = element("p", "");
           paymentStatus.setAttribute("aria-live", "polite");
           paymentForm.append(methodSelect, referenceInput, paymentSubmit, paymentStatus);
@@ -286,8 +293,11 @@ async function chargerProduitsPublics() {
             methodSelect.addEventListener("change", showMethodDetails);
             showMethodDetails();
             if (!methods.length) paymentForm.hidden = true;
-            paymentForm.addEventListener("submit", async paymentEvent => {
-              paymentEvent.preventDefault();
+            paymentSubmit.addEventListener("click", async () => {
+              if (!methodSelect.value || !referenceInput.value.trim()) {
+                paymentStatus.textContent = "Choisissez un moyen de paiement et saisissez la référence.";
+                return;
+              }
               paymentSubmit.disabled = true;
               paymentStatus.textContent = "Enregistrement...";
               try {
@@ -313,7 +323,7 @@ async function chargerProduitsPublics() {
         } catch (error) {
           orderMessage.textContent = error.message;
         } finally {
-          submitOrder.disabled = false;
+          submitOrder.disabled = orderCreated;
         }
       });
       card.append(orderButton, orderForm);
