@@ -504,6 +504,8 @@ async function loadAdminModule(name) {
       renderPaymentsModule(rows, output);
     } else if (name === "media") {
       renderMediaModule(rows, output);
+    } else if (name === "settings") {
+      renderSettingsModule(rows, output);
     } else {
       output.textContent = rows.length
         ? JSON.stringify(rows, null, 2)
@@ -536,6 +538,63 @@ async function generateDescription(kind) {
   } catch (error) {
     showMessage(isService ? "serviceMessage" : "productMessage", error.message);
   }
+}
+
+function renderSettingsModule(rows, target) {
+  target.replaceChildren();
+  const saved = new Map(rows.map(row => [row.setting_key, row.setting_value || {}]));
+  const defaults = {
+    business_profile: { name: "DRBCK TECH.IT.PRO", slogan: "Service rapide et fiable à Likasi", city: "Likasi", country: "RDC", description: "" },
+    contact: { whatsapp: "+243 972 052 103", public_email: "", phone: "", address: "" },
+    branding: { logo_url: "", primary_color: "#10264a", secondary_color: "#d4a62a" },
+    delivery: { methods: [], instructions: "", estimated_time: "" },
+    storefront: { currency: "USD", allow_website_orders: true, allow_whatsapp_orders: true },
+    notifications: { email_enabled: false, whatsapp_enabled: false }
+  };
+  const intro = document.createElement("p");
+  intro.textContent = "Modifiez les paramètres de l'entreprise. Les données sont enregistrées dans Supabase. Gardez la devise en USD.";
+  target.appendChild(intro);
+  Object.entries(defaults).forEach(([key, defaultValue]) => {
+    const card = document.createElement("article");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = key.replace(/_/g, " ");
+    const editor = document.createElement("textarea");
+    editor.rows = 6;
+    editor.maxLength = 8000;
+    editor.style.width = "100%";
+    editor.value = JSON.stringify(saved.get(key) || defaultValue, null, 2);
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "Enregistrer";
+    const status = document.createElement("p");
+    save.addEventListener("click", async () => {
+      let value;
+      try {
+        value = JSON.parse(editor.value);
+      } catch {
+        status.textContent = "JSON invalide. Corrigez les guillemets et les virgules.";
+        return;
+      }
+      save.disabled = true;
+      status.textContent = "Enregistrement...";
+      try {
+        const result = await apiRequest("/api/admin/settings/" + key, {
+          method: "POST",
+          body: JSON.stringify({ setting_value: value })
+        });
+        status.textContent = result.message || "Réglages enregistrés.";
+        status.className = "success";
+      } catch (error) {
+        status.textContent = error.message;
+        status.className = "error";
+      } finally {
+        save.disabled = false;
+      }
+    });
+    card.append(heading, editor, save, status);
+    target.appendChild(card);
+  });
 }
 
 function renderMediaModule(rows, target) {
