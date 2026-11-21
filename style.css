@@ -165,3 +165,16 @@ footer {
   object-fit: cover;
   display: block;
 }
+
+/* BOUTIQUE PUBLIQUE */
+#products-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 600px) {
+  #products-list {
+    grid-template-columns: 1fr;
+  }
+}
