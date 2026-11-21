@@ -201,33 +201,60 @@ function hideMessage(id) {
   box.style.display = "none";
 }
 
-async function apiRequest(path, options={}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {})
+let refreshInProgress = null;
+
+async function refreshAdminSession() {
+  const refreshToken = sessionStorage.getItem("drbck_admin_refresh_token") || "";
+  if (!refreshToken) return false;
+  if (refreshInProgress) return refreshInProgress;
+  refreshInProgress = (async () => {
+    try {
+      const response = await fetch(API + "/api/admin/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.access_token || !data.refresh_token) return false;
+      adminToken = data.access_token;
+      sessionStorage.setItem("drbck_admin_token", data.access_token);
+      sessionStorage.setItem("drbck_admin_refresh_token", data.refresh_token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInProgress = null;
+    }
+  })();
+  return refreshInProgress;
+}
+
+async function apiRequest(path, options={}, allowRefresh=true) {
+  const send = async () => {
+    const headers = {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    };
+    if (adminToken) headers.Authorization = "Bearer " + adminToken;
+    return fetch(API + path, { ...options, headers });
   };
 
-  if (adminToken) {
-    headers.Authorization = "Bearer " + adminToken;
+  let response = await send();
+  if (response.status === 401 && allowRefresh &&
+      path !== "/api/admin/login" && path !== "/api/admin/refresh" &&
+      await refreshAdminSession()) {
+    response = await send();
   }
 
-  const response = await fetch(API + path, {
-    ...options,
-    headers
-  });
-
   let data;
-
   try {
     data = await response.json();
   } catch {
     throw new Error("Réponse invalide du serveur.");
   }
-
   if (!response.ok || data.success === false) {
     throw new Error(data.message || "Une erreur est survenue.");
   }
-
   return data;
 }
 
@@ -258,6 +285,7 @@ document.getElementById("loginForm").addEventListener("submit", async event => {
     }
 
     sessionStorage.setItem("drbck_admin_token", adminToken);
+    if (data.refresh_token) sessionStorage.setItem("drbck_admin_refresh_token", data.refresh_token);
 
     await openDashboard(data.profile);
 
@@ -310,6 +338,7 @@ async function logout(showLogin=true) {
 
   adminToken = "";
   sessionStorage.removeItem("drbck_admin_token");
+  sessionStorage.removeItem("drbck_admin_refresh_token");
   dashboard.classList.add("hidden");
   loginSection.classList.remove("hidden");
   document.getElementById("password").value = "";
