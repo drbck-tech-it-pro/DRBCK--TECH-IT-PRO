@@ -463,6 +463,8 @@ async function loadAdminModule(name) {
     const rows = data[module.field] || [];
     if (name === "orders") {
       renderOrdersModule(rows, output);
+    } else if (name === "customers") {
+      renderCustomersModule(rows, output);
     } else if (name === "paymentMethods") {
       renderPaymentMethodsModule(rows, output);
     } else {
@@ -476,6 +478,52 @@ async function loadAdminModule(name) {
   }
 }
 
+
+function renderCustomersModule(rows, target) {
+  target.replaceChildren();
+  if (!rows.length) {
+    target.textContent = "Aucun client issu des commandes pour le moment.";
+    return;
+  }
+
+  const intro = document.createElement("p");
+  intro.textContent = rows.length + " fiche(s) client — coordonnées et historique calculés à partir des commandes. Aucun compte client public n'est créé.";
+  target.appendChild(intro);
+
+  rows.forEach(customer => {
+    const card = document.createElement("article");
+    card.className = "service";
+    const heading = document.createElement("h3");
+    heading.textContent = customer.customer_name || "Client sans nom";
+    const contact = document.createElement("p");
+    contact.textContent = [
+      customer.customer_email || "E-mail non fourni",
+      customer.customer_phone || "Téléphone non fourni"
+    ].join(" · ");
+    const stats = document.createElement("p");
+    stats.textContent = "Commandes : " + Number(customer.orders_count || 0) +
+      " · Total dépensé : " + Number(customer.total_spent || 0).toFixed(2) +
+      " " + (customer.currency || "USD");
+    const last = document.createElement("p");
+    last.textContent = "Dernière commande : " +
+      (customer.last_order_at ? new Date(customer.last_order_at).toLocaleString("fr-FR") : "—");
+    const actions = document.createElement("div");
+    if (customer.customer_phone) {
+      const phone = document.createElement("a");
+      phone.href = "tel:" + String(customer.customer_phone).replace(/[^+0-9]/g, "");
+      phone.textContent = "Appeler";
+      actions.appendChild(phone);
+    }
+    if (customer.customer_email) {
+      const email = document.createElement("a");
+      email.href = "mailto:" + encodeURIComponent(customer.customer_email);
+      email.textContent = customer.customer_phone ? " · Envoyer un e-mail" : "Envoyer un e-mail";
+      actions.appendChild(email);
+    }
+    card.append(heading, contact, stats, last, actions);
+    target.appendChild(card);
+  });
+}
 
 function renderPaymentMethodsModule(rows, target) {
   target.replaceChildren();
