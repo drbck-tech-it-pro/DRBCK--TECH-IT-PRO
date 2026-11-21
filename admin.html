@@ -289,7 +289,7 @@ async function openDashboard(profile) {
       "Connecté : " + profile.full_name;
   }
 
-  await Promise.all([loadOverview(), loadServices()]);
+  await Promise.all([loadOverview(), loadServices(), loadProducts()]);
 }
 
 // DECONNEXION
