@@ -554,9 +554,39 @@ function renderMediaModule(rows, target) {
     return;
   }
   rows.forEach(row => {
-    const item = document.createElement("p");
-    item.textContent = (row.file_name || "Fichier") + " · " + (row.file_type || "") +
+    const item = document.createElement("article");
+    item.className = "service";
+    const label = document.createElement("p");
+    label.textContent = (row.file_name || "Fichier") + " · " + (row.file_type || "") +
       " · " + (row.status || "draft") + " · " + (row.source || "upload");
+    item.appendChild(label);
+    if (row.source === "ai" && row.status === "draft") {
+      const approve = document.createElement("button");
+      approve.type = "button";
+      approve.textContent = "Valider et publier";
+      approve.addEventListener("click", async () => {
+        approve.disabled = true;
+        try {
+          const result = await apiRequest("/api/admin/media/" + encodeURIComponent(row.id) + "/publish", {
+            method: "POST", body: JSON.stringify({})
+          });
+          showMessage("moduleMessage", result.message || "Média publié.", "success");
+          await loadAdminModule("media");
+        } catch (error) {
+          showMessage("moduleMessage", error.message);
+          approve.disabled = false;
+        }
+      });
+      item.appendChild(approve);
+    }
+    if (row.public_url) {
+      const link = document.createElement("a");
+      link.href = row.public_url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Voir le média publié";
+      item.appendChild(link);
+    }
     target.appendChild(item);
   });
 }
