@@ -161,6 +161,56 @@ async function writeAdminHistory(admin, action, targetType, targetId, details = 
   }
 }
 
+function pdfSafeText(value) {
+  return String(value == null ? "" : value).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]/g, "?").replace(/([\\()])/g, "\\$1");
+}
+function buildInvoicePdf(order, items, invoiceNumber) {
+  const lines = ["DRBCK TECH.IT.PRO", "Service rapide et fiable a Likasi",
+    "FACTURE " + invoiceNumber, "Date : " + new Date().toLocaleDateString("fr-FR"),
+    "Client : " + (order.customer_name || "Client"), "E-mail : " + (order.customer_email || "-"),
+    "Telephone : " + (order.customer_phone || "-"), "Commande : " + (order.order_number || order.id),
+    "Article                         Qte       Prix       Total"];
+  for (const item of items) lines.push(String(item.item_name || "Article").slice(0, 30) + "    " +
+    Number(item.quantity || 1) + "    " + Number(item.unit_price || 0).toFixed(2) + " USD    " +
+    Number(item.total_price || 0).toFixed(2) + " USD");
+  lines.push("TOTAL : " + Number(order.total_amount || 0).toFixed(2) + " USD",
+    "Paiement : " + (order.payment_status || "pending"), "Merci pour votre confiance. WhatsApp : +243 972 052 103");
+  const commands = ["BT", "/F1 10 Tf", "50 790 Td", "14 TL"];
+  lines.forEach((line, index) => { if (index) commands.push("T*"); commands.push("(" + pdfSafeText(line) + ") Tj"); });
+  commands.push("ET");
+  const stream = commands.join("\n");
+  const objects = ["<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Length " + Buffer.byteLength(stream, "ascii") + " >>\nstream\n" + stream + "\nendstream"];
+  let pdf = "%PDF-1.4\n"; const offsets = [0];
+  objects.forEach((object, index) => { offsets.push(Buffer.byteLength(pdf, "ascii")); pdf += (index + 1) + " 0 obj\n" + object + "\nendobj\n"; });
+  const xrefOffset = Buffer.byteLength(pdf, "ascii");
+  pdf += "xref\n0 " + (objects.length + 1) + "\n0000000000 65535 f \n";
+  for (let i = 1; i < offsets.length; i++) pdf += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
+  pdf += "trailer\n<< /Size " + (objects.length + 1) + " /Root 1 0 R >>\nstartxref\n" + xrefOffset + "\n%%EOF";
+  return Buffer.from(pdf, "ascii");
+}
+async function uploadPrivateInvoice(storagePath, pdfBuffer) {
+  const response = await fetch(SUPABASE_URL + "/storage/v1/object/customer-invoices/" +
+    storagePath.split("/").map(encodeURIComponent).join("/"), { method: "POST",
+      headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
+        "Content-Type": "application/pdf", "x-upsert": "false" }, body: pdfBuffer });
+  if (!response.ok) { console.error("Echec stockage facture :", response.status, await response.text());
+    throw new Error("Impossible de stocker le PDF de la facture."); }
+}
+async function createInvoiceSignedUrl(storagePath) {
+  const response = await fetch(SUPABASE_URL + "/storage/v1/object/sign/customer-invoices/" +
+    storagePath.split("/").map(encodeURIComponent).join("/"), { method: "POST",
+      headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
+        "Content-Type": "application/json" }, body: JSON.stringify({ expiresIn: 300 }) });
+  const data = await response.json();
+  if (!response.ok || !data.signedURL) throw new Error("Impossible de créer le lien sécurisé de la facture.");
+  return data.signedURL.startsWith("http") ? data.signedURL : SUPABASE_URL + data.signedURL;
+}
+
 // --------------------------------------------------
 // AUTHENTIFICATION SUPABASE
 // --------------------------------------------------
@@ -862,6 +912,50 @@ const server = http.createServer(async (req, res) => {
       // --------------------------------------------
       // CREATION D'UNE LIVRAISON
       // --------------------------------------------
+
+
+      const invoiceOrderMatch = pathname.match(new RegExp("^/api/admin/orders/([0-9a-fA-F-]{36})/invoice$"));
+      if (invoiceOrderMatch && req.method === "POST") {
+        const orderId = invoiceOrderMatch[1];
+        const [orders, items, existing] = await Promise.all([
+          supabaseRequest("orders?select=id,order_number,customer_name,customer_email,customer_phone,total_amount,currency,payment_status&id=eq." + encodeURIComponent(orderId) + "&limit=1"),
+          supabaseRequest("order_items?select=item_name,quantity,unit_price,total_price&order_id=eq." + encodeURIComponent(orderId) + "&order=created_at.asc"),
+          supabaseRequest("invoices?select=id,invoice_number,pdf_path,status&order_id=eq." + encodeURIComponent(orderId) + "&limit=1")
+        ]);
+        if (!Array.isArray(orders) || !orders.length) { sendJSON(res, 404, { success: false, message: "Commande introuvable." }); return; }
+        const order = orders[0];
+        if (order.payment_status !== "confirmed") { sendJSON(res, 409, { success: false, message: "Facture indisponible : le paiement doit d'abord être réellement vérifié." }); return; }
+        if (Array.isArray(existing) && existing.length) {
+          const signedUrl = await createInvoiceSignedUrl(existing[0].pdf_path);
+          sendJSON(res, 200, { success: true, invoice: existing[0], signed_url: signedUrl, reused: true }); return;
+        }
+        const invoiceNumber = "DRBCK-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" + crypto.randomBytes(3).toString("hex").toUpperCase();
+        const storagePath = "invoices/" + invoiceNumber + ".pdf";
+        await uploadPrivateInvoice(storagePath, buildInvoicePdf(order, Array.isArray(items) ? items : [], invoiceNumber));
+        let created;
+        try {
+          created = await supabaseRequest("invoices", { method: "POST", body: {
+            order_id: orderId, invoice_number: invoiceNumber, customer_name: order.customer_name || "Client",
+            customer_email: order.customer_email || null, amount: Number(order.total_amount || 0),
+            currency: order.currency || "USD", pdf_path: storagePath, status: "issued"
+          }});
+        } catch (error) {
+          await fetch(SUPABASE_URL + "/storage/v1/object/customer-invoices/" + storagePath.split("/").map(encodeURIComponent).join("/"),
+            { method: "DELETE", headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY } }).catch(() => {});
+          throw error;
+        }
+        const invoice = Array.isArray(created) ? created[0] : created;
+        await writeAdminHistory(admin, "invoice.created", "invoice", invoice && invoice.id, { order_id: orderId, invoice_number: invoiceNumber });
+        const signedUrl = await createInvoiceSignedUrl(storagePath);
+        sendJSON(res, 201, { success: true, message: "Facture PDF créée.", invoice, signed_url: signedUrl }); return;
+      }
+      const invoiceDownloadMatch = pathname.match(new RegExp("^/api/admin/invoices/([0-9a-fA-F-]{36})/download$"));
+      if (invoiceDownloadMatch && req.method === "GET") {
+        const rows = await supabaseRequest("invoices?select=id,invoice_number,pdf_path,status&id=eq." + encodeURIComponent(invoiceDownloadMatch[1]) + "&limit=1");
+        if (!Array.isArray(rows) || !rows.length || !rows[0].pdf_path) { sendJSON(res, 404, { success: false, message: "Facture introuvable." }); return; }
+        const signedUrl = await createInvoiceSignedUrl(rows[0].pdf_path);
+        sendJSON(res, 200, { success: true, signed_url: signedUrl, expires_in: 300 }); return;
+      }
 
       if (req.method === "POST" && pathname === "/api/admin/shipments") {
         const body = await readBody(req);
