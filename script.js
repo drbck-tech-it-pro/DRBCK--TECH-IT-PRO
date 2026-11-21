@@ -106,3 +106,89 @@ if (whatsappLink) {
 }
 
 chargerServicesPublics();
+
+// --------------------------------------------------
+// PRODUITS PUBLICS — SEULEMENT LES PRODUITS PUBLIES
+// --------------------------------------------------
+
+async function chargerProduitsPublics() {
+  const liste = document.getElementById("products-list");
+  if (!liste) return;
+
+  liste.replaceChildren(element("p", "Chargement des produits..."));
+
+  try {
+    const response = await fetch(`${API_BASE}/api/products`, {
+      cache: "no-store"
+    });
+    const data = await response.json();
+
+    if (!response.ok || data.success === false) {
+      throw new Error(data.message || "Erreur de chargement des produits.");
+    }
+
+    const produits = Array.isArray(data.products) ? data.products : [];
+    liste.replaceChildren();
+
+    if (!produits.length) {
+      liste.appendChild(element("p", "Aucun produit publié pour le moment."));
+      return;
+    }
+
+    produits.forEach(produit => {
+      const card = element("article", null, "service-card");
+
+      if (produit.image_url && /^https?:\/\//i.test(produit.image_url)) {
+        const image = element("img", null, "service-photo");
+        image.src = produit.image_url;
+        image.alt = produit.name || "Photo du produit";
+        image.loading = "lazy";
+        image.onerror = () => image.remove();
+        card.appendChild(image);
+      }
+
+      card.appendChild(element("h3", produit.name || "Produit"));
+      card.appendChild(element("p", produit.description || "Contactez-nous pour plus d'informations."));
+
+      const currency = produit.currency || "USD";
+      const price = Number(produit.price);
+      card.appendChild(element(
+        "strong",
+        Number.isFinite(price) ? `Prix : ${price.toFixed(2)} ${currency}` : "Prix : sur demande"
+      ));
+
+      card.appendChild(element(
+        "p",
+        produit.product_type === "digital" ? "Produit numérique" : "Produit physique"
+      ));
+
+      if (produit.product_type === "physical" && Number.isFinite(Number(produit.stock))) {
+        card.appendChild(element(
+          "p",
+          Number(produit.stock) > 0 ? `Stock disponible : ${produit.stock}` : "Rupture de stock"
+        ));
+      }
+
+      const link = element("a", "Commander sur WhatsApp");
+      link.href = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(
+        "Bonjour DRBCK TECH.IT.PRO, je souhaite commander : " + (produit.name || "ce produit")
+      )}`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      if (produit.product_type === "physical" && Number(produit.stock) === 0) {
+        link.textContent = "Demander la disponibilité";
+      }
+      card.appendChild(link);
+      liste.appendChild(card);
+    });
+  } catch (error) {
+    console.error("Erreur produits DRBCK :", error);
+    liste.replaceChildren(element(
+      "p",
+      "La boutique est momentanément indisponible. Contactez-nous sur WhatsApp au +243 972 052 103."
+    ));
+  }
+}
+
+chargerProduitsPublics();
+
