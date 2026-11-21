@@ -1166,7 +1166,7 @@ const server = http.createServer(async (req, res) => {
           const signedUrl = await createInvoiceSignedUrl(existing[0].pdf_path);
           sendJSON(res, 200, { success: true, invoice: existing[0], signed_url: signedUrl, reused: true }); return;
         }
-        const invoiceNumber = "DRBCK-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" + crypto.randomBytes(3).toString("hex").toUpperCase();
+        const invoiceNumber = "DRBCK-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" + crypto.randomBytes(6).toString("hex").toUpperCase();
         const storagePath = "invoices/" + invoiceNumber + ".pdf";
         await uploadPrivateInvoice(storagePath, buildInvoicePdf(order, Array.isArray(items) ? items : [], invoiceNumber));
         let created;
