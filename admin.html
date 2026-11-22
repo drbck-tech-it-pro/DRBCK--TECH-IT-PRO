@@ -896,6 +896,37 @@ function renderMediaModule(rows, target) {
       " · " + (row.status || "draft") + " · " + (row.source || "upload");
     item.appendChild(label);
     if (row.source === "ai" && row.status === "draft") {
+      const previewButton = document.createElement("button");
+      previewButton.type = "button";
+      previewButton.className = "secondary";
+      previewButton.textContent = "👁 Aperçu de l’image";
+      const imagePreview = document.createElement("img");
+      imagePreview.alt = "Aperçu de l’image IA en brouillon";
+      imagePreview.hidden = true;
+      imagePreview.style.cssText = "display:block;max-width:100%;max-height:420px;object-fit:contain;margin:12px 0;border-radius:10px";
+      previewButton.addEventListener("click", async () => {
+        if (!imagePreview.hidden) {
+          imagePreview.hidden = true;
+          previewButton.textContent = "👁 Aperçu de l’image";
+          return;
+        }
+        previewButton.disabled = true;
+        previewButton.textContent = "Chargement de l’aperçu...";
+        try {
+          const previewData = await apiRequest("/api/admin/media/" + encodeURIComponent(row.id) + "/preview");
+          imagePreview.src = previewData.preview_url;
+          imagePreview.hidden = false;
+          previewButton.textContent = "Masquer l’aperçu";
+        } catch (error) {
+          showMessage("moduleMessage", error.message || "Aperçu indisponible.");
+          previewButton.textContent = "👁 Aperçu de l’image";
+        } finally {
+          previewButton.disabled = false;
+        }
+      });
+      item.appendChild(previewButton);
+      item.appendChild(imagePreview);
+
       const approve = document.createElement("button");
       approve.type = "button";
       approve.textContent = "Valider et publier";
