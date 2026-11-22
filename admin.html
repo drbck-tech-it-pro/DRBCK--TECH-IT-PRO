@@ -160,12 +160,21 @@
         <label>Nom du service</label>
         <input id="serviceName" required>
 
-        <label>Description</label>
-        <textarea id="serviceDescription"></textarea>
-        <button type="button" class="secondary" onclick="generateDescription('service')">Rédiger avec DRBCK TECH IA</button>
+        <label>Prix du service en dollars (USD)</label>
+        <input id="servicePrice" placeholder="Exemple : 10 $" required>
 
-        <label>Prix en dollars</label>
-        <input id="servicePrice" placeholder="Exemple : 10 $">
+        <div class="lia-admin-panel" style="margin:14px 0;padding:16px;border:2px solid #2d8a72">
+          <h3>🤖 GÉNÉRATEUR IA — SERVICES</h3>
+          <p class="section-note">1. Écris le nom et le prix ci-dessus. 2. Clique pour créer automatiquement la description et l’image. 3. Vérifie le résultat dans la médiathèque avant publication.</p>
+          <button type="button" id="generateFullService">✨ Générer la description + la photo du service</button>
+          <div id="serviceAiStatus" class="section-note" aria-live="polite"></div>
+          <img id="serviceAiPreview" class="lia-admin-preview hidden" alt="Aperçu de la photo du service générée">
+          <button type="button" class="secondary" id="openServiceGallery" hidden>🖼️ Voir le service dans la médiathèque</button>
+        </div>
+
+        <label>Description du service</label>
+        <textarea id="serviceDescription"></textarea>
+        <button type="button" class="secondary" onclick="generateDescription('service')">📝 Générer seulement la description</button>
 
         <label>Photo du service</label>
         <input id="servicePhoto" type="url" placeholder="Lien de la photo (ou utilise le bouton ci-dessous)">
@@ -198,19 +207,19 @@
         <input type="hidden" id="productId">
         <label>Nom du produit</label>
         <input id="productName" required>
-        <div class="lia-admin-panel" style="margin:12px 0">
-          <h3>✨ Générer un produit avec DRBCK TECH IA</h3>
-          <p class="section-note">Saisis le nom et le prix ci-dessus, puis l’IA rédige la description et crée une image. Tu peux aussi choisir ta propre photo.</p>
-          <button type="button" id="generateFullProduct">✨ Générer description + photo</button>
+        <label>Prix du produit en dollars (USD)</label>
+        <input id="productPrice" type="number" min="0" step="0.01" required>
+        <div class="lia-admin-panel" style="margin:14px 0;padding:16px;border:2px solid #3978b8">
+          <h3>🤖 GÉNÉRATEUR IA — PRODUITS</h3>
+          <p class="section-note">1. Écris le nom et le prix ci-dessus. 2. Clique pour créer automatiquement la description et l’image. 3. Vérifie le résultat dans la médiathèque avant publication. Tu peux aussi choisir ta propre photo.</p>
+          <button type="button" id="generateFullProduct">✨ Générer la description + la photo du produit</button>
           <div id="productAiStatus" class="section-note" aria-live="polite"></div>
           <img id="productAiPreview" class="lia-admin-preview hidden" alt="Aperçu de la photo du produit générée">
-          <button type="button" class="secondary" id="openProductGallery" hidden>🖼️ Ouvrir la médiathèque pour vérifier et publier</button>
+          <button type="button" class="secondary" id="openProductGallery" hidden>🖼️ Voir le produit dans la médiathèque</button>
         </div>
-        <label>Description</label>
+        <label>Description du produit</label>
         <textarea id="productDescription"></textarea>
-        <button type="button" class="secondary" onclick="generateDescription('product')">Rédiger avec DRBCK TECH IA</button>
-        <label>Prix en dollars (USD)</label>
-        <input id="productPrice" type="number" min="0" step="0.01" required>
+        <button type="button" class="secondary" onclick="generateDescription('product')">📝 Générer seulement la description</button>
         <label>Type</label>
         <select id="productType"><option value="digital">Numérique</option><option value="physical">Physique</option></select>
         <label>Stock (laisser vide si non suivi)</label>
@@ -777,6 +786,66 @@ async function loadAdminModule(name) {
   }
 }
 
+
+let generatedServiceMediaId = "";
+
+document.getElementById("generateFullService").addEventListener("click", async () => {
+  const name = document.getElementById("serviceName").value.trim();
+  const price = document.getElementById("servicePrice").value.trim();
+  const status = document.getElementById("serviceAiStatus");
+  const button = document.getElementById("generateFullService");
+  const preview = document.getElementById("serviceAiPreview");
+  const galleryButton = document.getElementById("openServiceGallery");
+  if (!name || !price) {
+    showMessage("serviceMessage", "Saisis d'abord le nom du service et son prix en dollars.");
+    return;
+  }
+  button.disabled = true;
+  galleryButton.hidden = true;
+  preview.classList.add("hidden");
+  generatedServiceMediaId = "";
+  try {
+    status.textContent = "Étape 1/2 : DRBCK TECH IA rédige la description du service...";
+    const description = await apiRequest("/api/admin/ai/description", {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "service",
+        provider: document.getElementById("liaTextProvider").value,
+        prompt: "Nom du service : " + name + "\nPrix fourni : " + price + " USD. Rédige une description claire et professionnelle du service, sans inventer de prestations ni de garanties."
+      })
+    });
+    document.getElementById("serviceDescription").value = description.description || "";
+    status.textContent = "Étape 2/2 : création de l’image illustrative du service...";
+    const image = await apiRequest("/api/admin/ai/image", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "cloudflare",
+        prompt: "Visuel professionnel illustrant le service informatique suivant : " + name +
+          ". Image publicitaire réaliste pour une entreprise informatique, scène propre et moderne, composition claire, sans texte, sans prix, sans logo ni marque inventée."
+      })
+    });
+    generatedServiceMediaId = image.media && image.media.id ? image.media.id : "";
+    if (!generatedServiceMediaId || !image.preview_url) throw new Error("Image créée, mais aperçu indisponible. Vérifie la médiathèque.");
+    preview.src = image.preview_url;
+    preview.classList.remove("hidden");
+    const saved = await apiRequest("/api/admin/media/" + encodeURIComponent(generatedServiceMediaId) + "/save", {
+      method: "POST", body: JSON.stringify({})
+    });
+    status.textContent = "Service préparé : description rédigée et image enregistrée dans la galerie privée. Rien n’est publié.";
+    galleryButton.hidden = false;
+    showMessage("serviceMessage", saved.message || "Brouillon du service enregistré. Vérifie-le avant publication.", "success");
+  } catch (error) {
+    status.textContent = error.message || "La génération du service a échoué.";
+    showMessage("serviceMessage", status.textContent);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.getElementById("openServiceGallery").addEventListener("click", async () => {
+  await loadAdminModule("media");
+  document.getElementById("moduleTitle").scrollIntoView({ behavior: "smooth", block: "center" });
+});
 
 let generatedProductMediaId = "";
 
