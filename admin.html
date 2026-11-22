@@ -928,7 +928,28 @@ function renderMediaModule(rows, target) {
     label.textContent = (row.file_name || "Fichier") + " · " + (row.file_type || "") +
       " · " + (row.status || "draft") + " · " + (row.source || "upload");
     item.append(image, label);
-    if (row.source === "ai" && row.status === "draft") {
+    if (row.source === "ai" && (row.status === "draft" || row.status === "saved")) {
+      if (row.status === "draft") {
+        const saveToGallery = document.createElement("button");
+        saveToGallery.type = "button";
+        saveToGallery.textContent = "💾 Enregistrer dans la galerie";
+        saveToGallery.addEventListener("click", async () => {
+          saveToGallery.disabled = true;
+          saveToGallery.textContent = "Enregistrement...";
+          try {
+            const saved = await apiRequest("/api/admin/media/" + encodeURIComponent(row.id) + "/save", {
+              method: "POST", body: JSON.stringify({})
+            });
+            showMessage("moduleMessage", saved.message || "Photo enregistrée dans la galerie.", "success");
+            await loadAdminModule("media");
+          } catch (error) {
+            showMessage("moduleMessage", error.message);
+            saveToGallery.disabled = false;
+            saveToGallery.textContent = "💾 Réessayer l'enregistrement";
+          }
+        });
+        item.appendChild(saveToGallery);
+      }
       const previewButton = document.createElement("button");
       previewButton.type = "button";
       previewButton.className = "secondary";
