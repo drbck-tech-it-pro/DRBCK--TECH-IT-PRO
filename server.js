@@ -13,6 +13,10 @@ const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || "";
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN || "";
 
@@ -433,6 +437,72 @@ function extractOpenAIText(data) {
   }
 
   return result;
+}
+
+// --------------------------------------------------
+// GENERATION DE TEXTE MULTI-FOURNISSEURS (ADMIN)
+// --------------------------------------------------
+
+async function generateAdminText(provider, instructions, input) {
+  const errors = [];
+  const order = provider === "gemini" ? ["gemini", "groq"] :
+    provider === "openai" ? ["openai", "groq"] : ["groq"];
+
+  for (const engine of order) {
+    try {
+      if (engine === "gemini") {
+        if (!GEMINI_API_KEY) throw new Error("Clé Gemini absente.");
+        const response = await fetch(
+          "https://generativelanguage.googleapis.com/v1beta/models/" +
+            encodeURIComponent(GEMINI_MODEL) + ":generateContent?key=" +
+            encodeURIComponent(GEMINI_API_KEY),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ systemInstruction: { parts: [{ text: instructions }] },
+              contents: [{ role: "user", parts: [{ text: input }] }] })
+          }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error("Gemini a refusé la requête (" + response.status + ").");
+        const output = data && data.candidates && data.candidates[0] &&
+          data.candidates[0].content && data.candidates[0].content.parts
+          ? data.candidates[0].content.parts.map(part => part.text || "").join("").trim() : "";
+        if (!output) throw new Error("Gemini n'a renvoyé aucun texte.");
+        return { text: output, provider: engine };
+      }
+
+      if (engine === "openai") {
+        if (!OPENAI_API_KEY) throw new Error("Clé OpenAI absente.");
+        const response = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + OPENAI_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: OPENAI_MODEL, instructions, input })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error("OpenAI a refusé la requête (" + response.status + ").");
+        const output = extractOpenAIText(data);
+        if (!output) throw new Error("OpenAI n'a renvoyé aucun texte.");
+        return { text: output, provider: engine };
+      }
+
+      if (!GROQ_API_KEY) throw new Error("Clé Groq absente.");
+      const response = await fetch("https://api.groq.com/openai/v1/responses", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + GROQ_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: GROQ_MODEL, instructions, input })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error("Groq a refusé la requête (" + response.status + ").");
+      const output = extractOpenAIText(data);
+      if (!output) throw new Error("Groq n'a renvoyé aucun texte.");
+      return { text: output, provider: engine };
+    } catch (error) {
+      errors.push(engine + ": " + error.message);
+      if (engine === "groq") break;
+    }
+  }
+  throw new Error("Aucun moteur IA n'a répondu. " + errors.join(" | "));
 }
 
 // --------------------------------------------------
@@ -1518,7 +1588,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // ASSISTANT IA ADMINISTRATEUR : DESCRIPTION DE PRODUIT OU SERVICE
+      // ASSISTANT IA ADMINISTRATEUR : GROQ, GEMINI OU OPENAI AVEC REPLI GROQ
       if (req.method === "POST" && pathname === "/api/admin/ai/description") {
         if (!checkRateLimit("admin-ai-description:" + admin.user.id, 10, 60 * 60 * 1000)) {
           sendJSON(res, 429, { success: false, message: "Limite de génération atteinte. Réessayez plus tard." }); return;
@@ -1526,27 +1596,21 @@ const server = http.createServer(async (req, res) => {
         const body = await readBody(req);
         const prompt = String(body.prompt || "").trim().slice(0, 2000);
         const kind = body.kind === "service" ? "service informatique" : "produit";
+        const requestedProvider = ["groq", "gemini", "openai"].includes(body.provider) ? body.provider : "groq";
         if (!prompt) { sendJSON(res, 400, { success: false, message: "Décrivez le produit ou le service." }); return; }
-        if (!GROQ_API_KEY) { sendJSON(res, 503, { success: false, message: "La clé OpenAI n'est pas configurée." }); return; }
-        const response = await fetch("https://api.groq.com/openai/v1/responses", {
-          method: "POST",
-          headers: { "Authorization": "Bearer " + GROQ_API_KEY, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: GROQ_MODEL,
-            instructions: "Tu es l'assistant rédactionnel interne de DRBCK TECH.IT.PRO à Likasi. Rédige en français une description claire, professionnelle et honnête. N'invente aucune caractéristique, garantie, compatibilité ou prix. Réponds uniquement par la description prête à publier.",
-            input: "Type : " + kind + "\nInformations fournies : " + prompt
-          })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          console.error("Erreur Groq description :", response.status, data);
-          sendJSON(res, response.status === 429 ? 503 : 502, { success: false,
-            message: "Génération indisponible. Vérifiez la clé Groq et les limites gratuites du compte." }); return;
+        const instructions = "Tu es l'assistant rédactionnel interne de DRBCK TECH.IT.PRO à Likasi. Rédige en français une description claire, professionnelle et honnête. N'invente aucune caractéristique, garantie, compatibilité ou prix. Réponds uniquement par la description prête à publier.";
+        try {
+          const generated = await generateAdminText(requestedProvider, instructions,
+            "Type : " + kind + "\nInformations fournies : " + prompt);
+          await writeAdminHistory(admin, "ai.description.generated", kind, null, {
+            promptLength: prompt.length, requestedProvider, actualProvider: generated.provider
+          });
+          sendJSON(res, 200, { success: true, description: generated.text,
+            provider: generated.provider, fallback: generated.provider !== requestedProvider });
+        } catch (error) {
+          console.error("Erreur génération IA admin :", error.message);
+          sendJSON(res, 503, { success: false, message: "Génération indisponible. Vérifiez les clés API et les quotas des moteurs IA configurés." });
         }
-        const description = extractOpenAIText(data);
-        if (!description) { sendJSON(res, 502, { success: false, message: "Aucune description reçue." }); return; }
-        await writeAdminHistory(admin, "ai.description.generated", kind, null, { promptLength: prompt.length });
-        sendJSON(res, 200, { success: true, description });
         return;
       }
 
