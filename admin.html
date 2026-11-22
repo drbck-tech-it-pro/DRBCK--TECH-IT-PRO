@@ -101,8 +101,11 @@
         <label>Prix en dollars</label>
         <input id="servicePrice" placeholder="Exemple : 10 $">
 
-        <label>Adresse de la photo</label>
-        <input id="servicePhoto" type="url" placeholder="https://...">
+        <label>Photo du service</label>
+        <input id="servicePhoto" type="url" placeholder="Lien de la photo (ou utilise le bouton ci-dessous)">
+        <input id="servicePhotoFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+        <button type="button" class="secondary" onclick="document.getElementById('servicePhotoFile').click()">Choisir une photo dans la galerie</button>
+        <img id="servicePhotoPreview" alt="Aperçu de la photo du service" class="hidden" style="max-width:180px;max-height:140px;object-fit:contain;border-radius:8px">
 
         <label>
           <input id="serviceActive" type="checkbox" checked style="width:auto">
@@ -138,8 +141,11 @@
         <select id="productType"><option value="digital">Numérique</option><option value="physical">Physique</option></select>
         <label>Stock (laisser vide si non suivi)</label>
         <input id="productStock" type="number" min="0" step="1">
-        <label>URL de l'image</label>
-        <input id="productImage" type="url" placeholder="https://...">
+        <label>Photo du produit</label>
+        <input id="productImage" type="url" placeholder="Lien de la photo (ou utilise le bouton ci-dessous)">
+        <input id="productImageFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+        <button type="button" class="secondary" onclick="document.getElementById('productImageFile').click()">Choisir une photo dans la galerie</button>
+        <img id="productImagePreview" alt="Aperçu de la photo du produit" class="hidden" style="max-width:180px;max-height:140px;object-fit:contain;border-radius:8px">
         <label>Chemin du fichier numérique (facultatif)</label>
         <input id="productFile" placeholder="Chemin privé Storage">
         <label>Statut de publication</label>
@@ -354,10 +360,53 @@ async function logout(showLogin=true) {
   }
 }
 
+// TELEVERSEMENT DE PHOTOS DEPUIS LA GALERIE
+function setImagePreview(previewId, url) {
+  const preview = document.getElementById(previewId);
+  if (!url) { preview.removeAttribute("src"); preview.classList.add("hidden"); return; }
+  preview.src = url;
+  preview.classList.remove("hidden");
+}
+async function uploadChosenImage(file, kind, urlInputId, previewId, messageId, button) {
+  if (!file) return;
+  const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  if (!allowed.includes(file.type)) { showMessage(messageId, "Format refusé. Choisis une image JPG, PNG, WEBP ou GIF."); return; }
+  if (file.size > 5 * 1024 * 1024) { showMessage(messageId, "Image trop volumineuse. Maximum : 5 Mo."); return; }
+  const oldText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Envoi de la photo...";
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Impossible de lire cette photo."));
+      reader.readAsDataURL(file);
+    });
+    const result = await apiRequest("/api/admin/media/upload-image", { method: "POST", body: JSON.stringify({ kind, file_name: file.name, image_data: dataUrl }) });
+    document.getElementById(urlInputId).value = result.public_url;
+    setImagePreview(previewId, result.public_url);
+    showMessage(messageId, "Photo envoyée. Enregistre maintenant le produit ou le service.", "success");
+  } catch (error) { showMessage(messageId, error.message || "Échec de l’envoi de la photo."); }
+  finally { button.disabled = false; button.textContent = oldText; }
+}
+document.getElementById("productImageFile").addEventListener("change", event => {
+  const button = document.querySelector('button[onclick*="productImageFile"]');
+  uploadChosenImage(event.target.files[0], "product", "productImage", "productImagePreview", "productMessage", button);
+  event.target.value = "";
+});
+document.getElementById("servicePhotoFile").addEventListener("change", event => {
+  const button = document.querySelector('button[onclick*="servicePhotoFile"]');
+  uploadChosenImage(event.target.files[0], "service", "servicePhoto", "servicePhotoPreview", "serviceMessage", button);
+  event.target.value = "";
+});
+document.getElementById("productImage").addEventListener("input", event => setImagePreview("productImagePreview", event.target.value.trim()));
+document.getElementById("servicePhoto").addEventListener("input", event => setImagePreview("servicePhotoPreview", event.target.value.trim()));
+
 // GESTION DES PRODUITS
 
 function resetProductForm() {
   document.getElementById("productForm").reset();
+  document.getElementById("productImagePreview").classList.add("hidden");
   document.getElementById("productId").value = "";
   document.getElementById("saveProductButton").textContent = "Créer le produit";
 }
@@ -412,6 +461,7 @@ function editProduct(product) {
   document.getElementById("productType").value = product.product_type || "digital";
   document.getElementById("productStock").value = product.stock ?? "";
   document.getElementById("productImage").value = product.image_url || "";
+  setImagePreview("productImagePreview", product.image_url || "");
   document.getElementById("productFile").value = product.file_path || "";
   document.getElementById("productStatus").value = product.publication_status || "draft";
   document.getElementById("productActive").checked = product.active === true;
@@ -1286,6 +1336,7 @@ function editService(service) {
   document.getElementById("serviceDescription").value = service.description || "";
   document.getElementById("servicePrice").value = service.prix || "";
   document.getElementById("servicePhoto").value = service.photo_url || "";
+  setImagePreview("servicePhotoPreview", service.photo_url || "");
   document.getElementById("serviceActive").checked =
     service.actif === true && service.publication_status === "published";
 
@@ -1298,6 +1349,7 @@ function editService(service) {
 
 function resetServiceForm() {
   document.getElementById("serviceForm").reset();
+  document.getElementById("servicePhotoPreview").classList.add("hidden");
   document.getElementById("serviceId").value = "";
   document.getElementById("serviceActive").checked = true;
   document.getElementById("saveServiceButton").textContent = "Ajouter le service";
