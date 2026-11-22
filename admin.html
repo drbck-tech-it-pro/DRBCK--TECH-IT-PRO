@@ -92,6 +92,11 @@
           <option value="gemini">Google Gemini (avec repli Groq)</option>
           <option value="openai">ChatGPT / OpenAI (avec repli Groq)</option>
         </select>
+        <label for="liaImageProvider">Moteur IA pour les images</label>
+        <select id="liaImageProvider">
+          <option value="cloudflare">Cloudflare Workers AI</option>
+        </select>
+        <p class="section-note">Les images sont générées par Cloudflare Workers AI et enregistrées en brouillon privé. Elles ne sont jamais publiées automatiquement.</p>
         <label for="liaCreatorPrompt">Décris le contenu souhaité</label>
         <textarea id="liaCreatorPrompt" maxlength="2500" placeholder="Ex. : visuel professionnel pour une offre de retouche photo, fond bleu, style moderne..."></textarea>
         <div class="lia-admin-actions">
@@ -113,7 +118,7 @@
           <button type="submit" id="liaAdminChatSend">Envoyer</button>
         </form>
       </div>
-      <p class="section-note">Les descriptions peuvent utiliser Groq, Gemini ou OpenAI. Si Gemini ou OpenAI échoue, le serveur essaie Groq. Les clés restent privées dans Render. Les images utilisent Cloudflare ; la vidéo n’est pas encore activée.</p>
+      <p class="section-note">Descriptions : Groq, Gemini ou OpenAI avec repli Groq. Images : Cloudflare Workers AI. Les clés restent privées dans Render. Toute création reste en brouillon jusqu’à validation manuelle ; la génération vidéo n’est pas encore activée.</p>
     </section>
 
     <div class="card">
@@ -490,7 +495,7 @@ document.getElementById("servicePhoto").addEventListener("input", event => setIm
     result.textContent = "LIA prépare l’image et l’enregistre en brouillon privé...";
     preview.classList.add("hidden");
     try {
-      const data = await apiRequest("/api/admin/ai/image", { method: "POST", body: JSON.stringify({ prompt: description }) });
+      const data = await apiRequest("/api/admin/ai/image", { method: "POST", body: JSON.stringify({ provider: document.getElementById("liaImageProvider").value, prompt: description }) });
       result.textContent = data.message || "Image enregistrée en brouillon privé.";
       if (data.preview_url) { preview.src = data.preview_url; preview.classList.remove("hidden"); }
     } catch (error) { result.textContent = error.message || "Génération d’image indisponible."; }
