@@ -1589,6 +1589,17 @@ const server = http.createServer(async (req, res) => {
       const mediaPublishMatch = pathname.match(new RegExp("^/api/admin/media/([0-9a-fA-F-]{36})/publish$"));
       if (mediaPublishMatch && req.method === "POST") {
         const mediaId = mediaPublishMatch[1];
+        const body = await readBody(req);
+        const kind = body.kind === "service" ? "service" : body.kind === "product" ? "product" : null;
+        const name = String(body.name || "").trim();
+        const description = String(body.description || "").trim();
+        const priceText = String(body.price || "").trim();
+        if (!kind || !name || !description || !priceText || name.length > 160 || description.length > 3000 || priceText.length > 80) {
+          sendJSON(res, 400, { success:false, message:"Type, nom, description et prix sont obligatoires." }); return;
+        }
+        if (kind === "product" && (!Number.isFinite(Number(priceText)) || Number(priceText) < 0)) {
+          sendJSON(res, 400, { success:false, message:"Le prix du produit doit être un nombre valide en dollars." }); return;
+        }
         const rows = await supabaseRequest("media_library?select=id,file_name,file_type,storage_path,source,status&id=eq." +
           encodeURIComponent(mediaId) + "&limit=1");
         if (!Array.isArray(rows) || !rows.length) {
@@ -1624,6 +1635,26 @@ const server = http.createServer(async (req, res) => {
         }
         const publicUrl = SUPABASE_URL + "/storage/v1/object/public/services-photos/" +
           publicPath.split("/").map(encodeURIComponent).join("/");
+        let linkedRecord;
+        try {
+          if (kind === "service") {
+            const saved = await supabaseRequest("services", { method:"POST", body:{
+              nom:name, description, prix:priceText, photo_url:publicUrl, actif:true, publication_status:"published"
+            }});
+            linkedRecord = Array.isArray(saved) ? saved[0] : saved;
+          } else {
+            const saved = await supabaseRequest("products", { method:"POST", body:{
+              name, description, price:Number(priceText), currency:"USD", product_type:"physical",
+              image_url:publicUrl, file_path:null, stock:null, active:true, publication_status:"published"
+            }});
+            linkedRecord = Array.isArray(saved) ? saved[0] : saved;
+          }
+        } catch (error) {
+          await fetch(SUPABASE_URL + "/storage/v1/object/services-photos/" + publicPath.split("/").map(encodeURIComponent).join("/"), {
+            method:"DELETE", headers:{ "apikey":SUPABASE_SECRET_KEY, "Authorization":"Bearer "+SUPABASE_SECRET_KEY }
+          }).catch(()=>{});
+          throw error;
+        }
         const updated = await supabaseRequest("media_library?id=eq." + encodeURIComponent(mediaId), {
           method: "PATCH", body: { storage_path: publicPath, public_url: publicUrl, status: "published" }
         });
@@ -1631,8 +1662,8 @@ const server = http.createServer(async (req, res) => {
           sourcePath.split("/").map(encodeURIComponent).join("/"), {
             method: "DELETE", headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
           }).catch(() => {});
-        await writeAdminHistory(admin, "media.published", "media", mediaId, { public_url: publicUrl });
-        sendJSON(res, 200, { success: true, message: "Image publiée après validation manuelle.", media: Array.isArray(updated) ? updated[0] : updated });
+        await writeAdminHistory(admin, "media.published", kind, linkedRecord && linkedRecord.id, { media_id:mediaId, name, price:priceText, public_url:publicUrl });
+        sendJSON(res, 200, { success: true, message: (kind === "service" ? "Service" : "Produit") + " enregistré et publié avec sa photo, sa description et son prix.", media: Array.isArray(updated) ? updated[0] : updated, record:linkedRecord });
         return;
       }
 
