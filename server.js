@@ -1548,9 +1548,9 @@ const server = http.createServer(async (req, res) => {
         }
         const media = rows[0];
         if (media.source !== "ai" || media.status !== "draft" ||
-            !new RegExp("^generated/ai-[a-f0-9-]+\\.png$", "i").test(String(media.storage_path || "")) ||
-            !new RegExp("^ai-[a-f0-9-]+\\.png$", "i").test(String(media.file_name || "")) ||
-            media.file_type !== "image/png") {
+            !new RegExp("^generated/ai-[a-f0-9-]+\\.jpg$", "i").test(String(media.storage_path || "")) ||
+            !new RegExp("^ai-[a-f0-9-]+\\.jpg$", "i").test(String(media.file_name || "")) ||
+            media.file_type !== "image/jpeg") {
           sendJSON(res, 409, { success: false, message: "Seuls les médias IA en brouillon peuvent être publiés ici." }); return;
         }
         const sourcePath = String(media.storage_path);
