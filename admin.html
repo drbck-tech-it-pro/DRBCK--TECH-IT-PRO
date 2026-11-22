@@ -1853,7 +1853,7 @@ function organizeAdminInterface() {
   chatCard.className = "card";
   chatCard.id = "adminHomeChat";
   chatCard.innerHTML = '<h2>💬 Mon intelligence artificielle</h2><p class="section-note">Discute, pose tes questions et échange tes idées avec ton assistant DRBCK TECH.</p>';
-  if (assistant) chatCard.appendChild(assistant);
+  if (assistant) { assistant.classList.remove("hidden"); chatCard.appendChild(assistant); }
   home.appendChild(chatCard);
 
   // Rubriques rangées dans le menu.
