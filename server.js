@@ -1559,7 +1559,7 @@ const server = http.createServer(async (req, res) => {
           sendJSON(res, 404, { success: false, message: "Image introuvable." }); return;
         }
         const media = rows[0];
-        if (media.source !== "ai" || media.status !== "draft" ||
+        if (media.source !== "ai" || !["draft", "saved"].includes(media.status) ||
             !new RegExp("^generated/ai-[a-f0-9-]+\\.jpg$", "i").test(String(media.storage_path || "")) ||
             media.file_type !== "image/jpeg") {
           sendJSON(res, 409, { success: false, message: "Aperçu réservé aux images IA en brouillon." }); return;
@@ -1583,6 +1583,36 @@ const server = http.createServer(async (req, res) => {
           success: true,
           preview_data_url: "data:image/jpeg;base64," + imageBuffer.toString("base64")
         });
+        return;
+      }
+
+      const mediaSaveMatch = pathname.match(new RegExp("^/api/admin/media/([0-9a-fA-F-]{36})/save$"));
+      if (mediaSaveMatch && req.method === "POST") {
+        const mediaId = mediaSaveMatch[1];
+        const rows = await supabaseRequest("media_library?select=id,file_name,file_type,storage_path,source,status&id=eq." +
+          encodeURIComponent(mediaId) + "&limit=1");
+        if (!Array.isArray(rows) || !rows.length) {
+          sendJSON(res, 404, { success: false, message: "Photo introuvable dans la médiathèque." }); return;
+        }
+        const media = rows[0];
+        if (media.source !== "ai" || media.status !== "draft" ||
+            !/^generated\\/ai-[a-f0-9-]+\\.jpg$/i.test(String(media.storage_path || "")) ||
+            media.file_type !== "image/jpeg") {
+          sendJSON(res, 409, { success: false, message: "Cette photo ne peut pas être enregistrée dans la galerie." }); return;
+        }
+        const fileResponse = await fetch(SUPABASE_URL + "/storage/v1/object/admin-media/" +
+          String(media.storage_path).split("/").map(encodeURIComponent).join("/"), {
+            headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
+          });
+        if (!fileResponse.ok) {
+          sendJSON(res, 502, { success: false, message: "Le fichier image est introuvable dans le stockage privé." }); return;
+        }
+        const updated = await supabaseRequest("media_library?id=eq." + encodeURIComponent(mediaId), {
+          method: "PATCH", body: { status: "saved" }
+        });
+        await writeAdminHistory(admin, "media.saved_to_gallery", "media", mediaId, { file_name: media.file_name });
+        sendJSON(res, 200, { success: true, media: Array.isArray(updated) ? updated[0] : updated,
+          message: "Photo enregistrée dans la galerie privée. Vous pouvez maintenant l'apercevoir ou la publier." });
         return;
       }
 
