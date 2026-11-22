@@ -1564,20 +1564,25 @@ const server = http.createServer(async (req, res) => {
             media.file_type !== "image/jpeg") {
           sendJSON(res, 409, { success: false, message: "Aperçu réservé aux images IA en brouillon." }); return;
         }
-        const signed = await fetch(SUPABASE_URL + "/storage/v1/object/sign/admin-media/" +
+        // Le serveur lit le fichier privé avec sa clé secrète et transmet une data URL
+        // à l'administrateur authentifié : aucun lien signé ni accès public au bucket.
+        const fileResponse = await fetch(SUPABASE_URL + "/storage/v1/object/admin-media/" +
           String(media.storage_path).split("/").map(encodeURIComponent).join("/"), {
-            method: "POST",
-            headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
-              "Content-Type": "application/json" },
-            body: JSON.stringify({ expiresIn: 3600 })
+            headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
           });
-        const signedData = await signed.json();
-        if (!signed.ok || !signedData.signedURL) {
-          console.error("Création aperçu image IA impossible :", signed.status, signedData);
-          sendJSON(res, 502, { success: false, message: "Impossible de préparer l’aperçu de cette image." }); return;
+        if (!fileResponse.ok) {
+          const detail = await fileResponse.text();
+          console.error("Lecture image privée impossible :", fileResponse.status, detail);
+          sendJSON(res, 502, { success: false, message: "Le fichier existe dans la médiathèque, mais Supabase refuse sa lecture. Vérifiez la clé secrète et le bucket admin-media." }); return;
         }
-        const previewUrl = signedData.signedURL.startsWith("http") ? signedData.signedURL : SUPABASE_URL + signedData.signedURL;
-        sendJSON(res, 200, { success: true, preview_url: previewUrl });
+        const imageBuffer = Buffer.from(await fileResponse.arrayBuffer());
+        if (!imageBuffer.length || imageBuffer.length > 12 * 1024 * 1024) {
+          sendJSON(res, 502, { success: false, message: "Taille du fichier image invalide." }); return;
+        }
+        sendJSON(res, 200, {
+          success: true,
+          preview_data_url: "data:image/jpeg;base64," + imageBuffer.toString("base64")
+        });
         return;
       }
 
