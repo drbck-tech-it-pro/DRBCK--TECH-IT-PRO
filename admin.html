@@ -31,6 +31,18 @@
     .stat span{font-size:13px;color:#64748b}
     .section-note{color:#64748b;font-size:13px;line-height:1.5}
 
+    .lia-admin-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+    .lia-admin-tabs button{width:auto;flex:1;min-width:145px}
+    .lia-admin-panel{background:#f5f7ff;border-radius:12px;padding:15px}
+    .lia-admin-chat{height:260px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:12px 0}
+    .lia-admin-msg{padding:9px 11px;border-radius:10px;margin:7px 0;max-width:88%;white-space:pre-wrap;overflow-wrap:anywhere}
+    .lia-admin-user{margin-left:auto;background:#0a66ff;color:#fff}
+    .lia-admin-bot{background:#eef2f8;color:#172033}
+    .lia-admin-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .lia-admin-actions button{flex:1;min-width:140px}
+    .lia-admin-preview{display:block;max-width:100%;max-height:360px;margin-top:12px;border-radius:10px}
+
+
     .service h3{margin:0 0 7px}
     .actions{display:flex;gap:8px}
     .actions button{flex:1}
@@ -74,6 +86,39 @@
       <div id="overviewStats" class="stats-grid"><div class="stat"><span>Chargement des données...</span></div></div>
       <p class="section-note">Première version : jusqu'à 1 000 lignes par rubrique. Le montant confirmé additionne uniquement les paiements dont le statut est « confirmed ».</p>
     </div>
+
+    <section class="card" id="liaAdminSection">
+      <h2>🤖 Les deux IA — LIA DRBCK TECH</h2>
+      <p class="section-note">Espace réservé aux administrateurs. Vérifie les contenus avant toute publication.</p>
+      <div class="lia-admin-tabs">
+        <button type="button" id="liaCreatorTab">✨ LIA Créatrice</button>
+        <button type="button" class="secondary" id="liaAssistantTab">💬 LIA Assistante</button>
+      </div>
+      <div id="liaCreatorPanel" class="lia-admin-panel">
+        <h3>✨ LIA Créatrice</h3>
+        <label for="liaCreatorPrompt">Décris le contenu souhaité</label>
+        <textarea id="liaCreatorPrompt" maxlength="2500" placeholder="Ex. : visuel professionnel pour une offre de retouche photo, fond bleu, style moderne..."></textarea>
+        <div class="lia-admin-actions">
+          <button type="button" id="liaGenerateImage">📸 Générer une image</button>
+          <button type="button" id="liaGenerateText" class="secondary">📝 Générer une description</button>
+          <button type="button" id="liaVideoInfo" class="secondary">🎬 Vidéo</button>
+        </div>
+        <div id="liaCreatorResult" class="lia-admin-chat" aria-live="polite">Le résultat apparaîtra ici. Les images restent en brouillon privé dans la médiathèque.</div>
+        <img id="liaCreatorPreview" class="lia-admin-preview hidden" alt="Aperçu temporaire de l'image générée">
+        <button type="button" id="liaCopyCreator" class="secondary">📋 Copier le résultat</button>
+      </div>
+      <div id="liaAssistantPanel" class="lia-admin-panel hidden">
+        <h3>💬 LIA Assistante</h3>
+        <div id="liaAdminChat" class="lia-admin-chat" aria-live="polite">
+          <div class="lia-admin-msg lia-admin-bot">Bonjour ! Je suis LIA, l’assistante de DRBCK TECH.IT.PRO. Comment puis-je vous aider dans l’administration ?</div>
+        </div>
+        <form id="liaAdminChatForm" class="lia-admin-actions">
+          <input id="liaAdminChatInput" maxlength="2000" placeholder="Écrivez votre message..." required>
+          <button type="submit" id="liaAdminChatSend">Envoyer</button>
+        </form>
+      </div>
+      <p class="section-note">La génération d’images dépend du crédit et des accès API OpenAI. La génération vidéo n’est pas activée actuellement.</p>
+    </section>
 
     <div class="card topline">
       <div>
@@ -401,6 +446,101 @@ document.getElementById("servicePhotoFile").addEventListener("change", event => 
 });
 document.getElementById("productImage").addEventListener("input", event => setImagePreview("productImagePreview", event.target.value.trim()));
 document.getElementById("servicePhoto").addEventListener("input", event => setImagePreview("servicePhotoPreview", event.target.value.trim()));
+
+/* LIA ADMIN — fonctions du tableau de bord */
+(function initAdminLIA() {
+  const creatorTab = document.getElementById("liaCreatorTab");
+  const assistantTab = document.getElementById("liaAssistantTab");
+  const creatorPanel = document.getElementById("liaCreatorPanel");
+  const assistantPanel = document.getElementById("liaAssistantPanel");
+  const prompt = document.getElementById("liaCreatorPrompt");
+  const result = document.getElementById("liaCreatorResult");
+  const preview = document.getElementById("liaCreatorPreview");
+  const imageButton = document.getElementById("liaGenerateImage");
+  const textButton = document.getElementById("liaGenerateText");
+  const videoButton = document.getElementById("liaVideoInfo");
+  const chat = document.getElementById("liaAdminChat");
+  const chatForm = document.getElementById("liaAdminChatForm");
+  const chatInput = document.getElementById("liaAdminChatInput");
+  const chatSend = document.getElementById("liaAdminChatSend");
+
+  function switchLIA(which) {
+    const creator = which === "creator";
+    creatorPanel.classList.toggle("hidden", !creator);
+    assistantPanel.classList.toggle("hidden", creator);
+    creatorTab.className = creator ? "" : "secondary";
+    assistantTab.className = creator ? "secondary" : "";
+  }
+  creatorTab.addEventListener("click", () => switchLIA("creator"));
+  assistantTab.addEventListener("click", () => switchLIA("assistant"));
+
+  imageButton.addEventListener("click", async () => {
+    const description = prompt.value.trim();
+    if (!description) { result.textContent = "Décris d’abord l’image à générer."; return; }
+    imageButton.disabled = true;
+    imageButton.textContent = "Génération en cours...";
+    result.textContent = "LIA prépare l’image et l’enregistre en brouillon privé...";
+    preview.classList.add("hidden");
+    try {
+      const data = await apiRequest("/api/admin/ai/image", { method: "POST", body: JSON.stringify({ prompt: description }) });
+      result.textContent = data.message || "Image enregistrée en brouillon privé.";
+      if (data.preview_url) { preview.src = data.preview_url; preview.classList.remove("hidden"); }
+    } catch (error) { result.textContent = error.message || "Génération d’image indisponible."; }
+    finally { imageButton.disabled = false; imageButton.textContent = "📸 Générer une image"; }
+  });
+
+  textButton.addEventListener("click", async () => {
+    const description = prompt.value.trim();
+    if (!description) { result.textContent = "Décris d’abord le produit, le service ou le visuel."; return; }
+    textButton.disabled = true;
+    textButton.textContent = "Rédaction...";
+    result.textContent = "LIA rédige la description...";
+    preview.classList.add("hidden");
+    try {
+      const data = await apiRequest("/api/admin/ai/description", {
+        method: "POST",
+        body: JSON.stringify({ kind: "product", prompt: "Rédige une présentation marketing honnête pour ce sujet : " + description })
+      });
+      result.textContent = data.description || "Aucune description reçue.";
+    } catch (error) { result.textContent = error.message || "Génération de texte indisponible."; }
+    finally { textButton.disabled = false; textButton.textContent = "📝 Générer une description"; }
+  });
+
+  videoButton.addEventListener("click", () => {
+    result.textContent = "La génération de fichiers vidéo n’est pas encore disponible sur le serveur. Aucun faux fichier ne sera créé. L’intégration d’un fournisseur vidéo compatible sera nécessaire.";
+    preview.classList.add("hidden");
+  });
+
+  document.getElementById("liaCopyCreator").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(result.textContent || ""); showMessage("moduleMessage", "Résultat copié.", "success"); }
+    catch { showMessage("moduleMessage", "Copie impossible. Sélectionne le texte pour le copier."); }
+  });
+
+  function addChatMessage(message, role) {
+    const node = document.createElement("div");
+    node.className = "lia-admin-msg " + (role === "user" ? "lia-admin-user" : "lia-admin-bot");
+    node.textContent = message;
+    chat.appendChild(node);
+    chat.scrollTop = chat.scrollHeight;
+  }
+  chatForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    const message = chatInput.value.trim();
+    if (!message || chatSend.disabled) return;
+    addChatMessage(message, "user");
+    chatInput.value = "";
+    chatSend.disabled = true;
+    try {
+      const response = await fetch(API + "/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || data.error || "Assistant indisponible.");
+      addChatMessage(data.reply || "Je n’ai pas reçu de réponse.", "bot");
+    } catch (error) { addChatMessage(error.message || "L’assistante est momentanément indisponible.", "bot"); }
+    finally { chatSend.disabled = false; chatInput.focus(); }
+  });
+})();
 
 // GESTION DES PRODUITS
 
