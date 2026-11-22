@@ -478,7 +478,7 @@ document.getElementById("productForm").addEventListener("submit", async event =>
     description: document.getElementById("productDescription").value.trim(),
     price: Number(document.getElementById("productPrice").value),
     product_type: document.getElementById("productType").value,
-    stock: document.getElementById("productStock").value,
+    stock: document.getElementById("productStock").value.trim() === "" ? null : Number(document.getElementById("productStock").value),
     image_url: document.getElementById("productImage").value.trim(),
     file_path: document.getElementById("productFile").value.trim(),
     publication_status: status,
