@@ -13,7 +13,8 @@ const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ""; // Conservée uniquement pour la génération d’images.
+const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || "";
+const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN || "";
 
 const sessions = new Map();
 const rateLimits = new Map();
@@ -1549,39 +1550,61 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // GENERATION D'IMAGE IA : STOCKAGE EN BROUILLON PRIVE
+      // GENERATION D'IMAGE IA AVEC CLOUDFLARE : STOCKAGE EN BROUILLON PRIVE
       if (req.method === "POST" && pathname === "/api/admin/ai/image") {
         if (!checkRateLimit("admin-ai-image:" + admin.user.id, 3, 60 * 60 * 1000)) {
           sendJSON(res, 429, { success: false, message: "Limite de génération d'images atteinte. Réessayez plus tard." }); return;
         }
         const body = await readBody(req);
-        const prompt = String(body.prompt || "").trim().slice(0, 2500);
+        const prompt = String(body.prompt || "").trim().slice(0, 2000);
         if (!prompt) { sendJSON(res, 400, { success: false, message: "Décrivez l'image à créer." }); return; }
-        if (!OPENAI_API_KEY) { sendJSON(res, 503, { success: false, message: "La clé OpenAI n'est pas configurée." }); return; }
-        const generated = await fetch("https://api.openai.com/v1/images/generations", {
-          method: "POST",
-          headers: { "Authorization": "Bearer " + OPENAI_API_KEY, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "gpt-image-2.6-flare", prompt,
-            n: 1, size: "1024x1024", output_format: "png" })
-        });
-        const imageData = await generated.json();
-        if (!generated.ok) {
-          console.error("Erreur IA image :", generated.status, imageData);
-          sendJSON(res, generated.status === 429 ? 503 : 502, { success: false,
-            message: "Génération d'image indisponible. Vérifiez le crédit et l'accès aux modèles d'image OpenAI." }); return;
+        if (!CLOUDFLARE_ACCOUNT_ID || !CLOUDFLARE_API_TOKEN) {
+          sendJSON(res, 503, { success: false, message: "La génération d'images n'est pas configurée. Ajoutez CLOUDFLARE_ACCOUNT_ID et CLOUDFLARE_API_TOKEN dans Render." }); return;
         }
-        const encoded = imageData && imageData.data && imageData.data[0] && imageData.data[0].b64_json;
-        if (!encoded) { sendJSON(res, 502, { success: false, message: "Aucune image reçue du fournisseur." }); return; }
+
+        const generated = await fetch(
+          "https://api.cloudflare.com/client/v4/accounts/" +
+            encodeURIComponent(CLOUDFLARE_ACCOUNT_ID) +
+            "/ai/run/@cf/black-forest-labs/flux-1-schnell",
+          {
+            method: "POST",
+            headers: {
+              "Authorization": "Bearer " + CLOUDFLARE_API_TOKEN,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ prompt, steps: 4 })
+          }
+        );
+
+        const imageData = await generated.json().catch(() => ({}));
+        if (!generated.ok || imageData.success === false) {
+          console.error("Erreur Cloudflare image :", generated.status, imageData);
+          sendJSON(res, generated.status === 429 ? 503 : 502, {
+            success: false,
+            message: generated.status === 401 || generated.status === 403
+              ? "Accès Cloudflare refusé. Vérifiez le jeton et ses permissions Workers AI."
+              : "Génération d'image indisponible. Vérifiez le quota gratuit et le modèle Cloudflare."
+          }); return;
+        }
+
+        const encoded = imageData && imageData.result && imageData.result.image
+          ? imageData.result.image
+          : imageData && imageData.image;
+        if (typeof encoded !== "string" || !encoded) {
+          console.error("Réponse image Cloudflare invalide :", imageData);
+          sendJSON(res, 502, { success: false, message: "Cloudflare n'a pas renvoyé d'image exploitable." }); return;
+        }
+
         const imageBuffer = Buffer.from(encoded, "base64");
         if (!imageBuffer.length || imageBuffer.length > 12 * 1024 * 1024) {
           sendJSON(res, 502, { success: false, message: "Taille d'image invalide." }); return;
         }
-        const fileName = "ai-" + crypto.randomUUID() + ".png";
+        const fileName = "ai-" + crypto.randomUUID() + ".jpg";
         const storagePath = "generated/" + fileName;
         const upload = await fetch(SUPABASE_URL + "/storage/v1/object/admin-media/" + storagePath, {
           method: "POST",
           headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
-            "Content-Type": "image/png", "x-upsert": "false" },
+            "Content-Type": "image/jpeg", "x-upsert": "false" },
           body: imageBuffer
         });
         if (!upload.ok) {
@@ -1591,7 +1614,7 @@ const server = http.createServer(async (req, res) => {
         let media;
         try {
           const inserted = await supabaseRequest("media_library", { method: "POST", body: {
-            file_name: fileName, file_type: "image/png", storage_path: storagePath,
+            file_name: fileName, file_type: "image/jpeg", storage_path: storagePath,
             public_url: null, source: "ai", status: "draft"
           }});
           media = Array.isArray(inserted) ? inserted[0] : inserted;
@@ -1612,8 +1635,8 @@ const server = http.createServer(async (req, res) => {
           sendJSON(res, 502, { success: false, message: "Image enregistrée en brouillon, mais aperçu temporairement indisponible.", media }); return;
         }
         const previewUrl = signedData.signedURL.startsWith("http") ? signedData.signedURL : SUPABASE_URL + signedData.signedURL;
-        await writeAdminHistory(admin, "ai.image.generated", "media", media && media.id, { file_name: fileName, status: "draft" });
-        sendJSON(res, 201, { success: true, message: "Image générée et enregistrée en brouillon. Elle n'est pas publiée.", media, preview_url: previewUrl });
+        await writeAdminHistory(admin, "ai.image.generated", "media", media && media.id, { file_name: fileName, status: "draft", provider: "cloudflare" });
+        sendJSON(res, 201, { success: true, message: "Image générée avec Cloudflare et enregistrée en brouillon. Elle n'est pas publiée.", media, preview_url: previewUrl });
         return;
       }
 
