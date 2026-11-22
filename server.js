@@ -1103,15 +1103,15 @@ const server = http.createServer(async (req, res) => {
         const updates = {};
         if (typeof body.email === "string" && body.email.trim()) {
           const email = body.email.trim().toLowerCase();
-          if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             sendJSON(res, 400, { success: false, message: "Adresse e-mail invalide." });
             return;
           }
           updates.email = email;
         }
         if (typeof body.phone === "string" && body.phone.trim()) {
-          const phone = body.phone.trim().replace(/[\\s().-]/g, "");
-          if (!/^\\+[1-9]\\d{7,14}$/.test(phone)) {
+          const phone = body.phone.trim().replace(/[\s().-]/g, "");
+          if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
             sendJSON(res, 400, { success: false, message: "Numéro invalide. Utilise le format international, par exemple +243..." });
             return;
           }
@@ -1641,7 +1641,7 @@ const server = http.createServer(async (req, res) => {
         }
         const media = rows[0];
         if (media.source !== "ai" || !["draft", "saved"].includes(media.status) ||
-            !new RegExp("^generated/ai-[a-f0-9-]+\\.jpg$", "i").test(String(media.storage_path || "")) ||
+            !new RegExp("^generated/ai-[a-f0-9-]+\.jpg$", "i").test(String(media.storage_path || "")) ||
             media.file_type !== "image/jpeg") {
           sendJSON(res, 409, { success: false, message: "Aperçu réservé aux images IA en brouillon." }); return;
         }
@@ -1677,7 +1677,7 @@ const server = http.createServer(async (req, res) => {
         }
         const media = rows[0];
         if (media.source !== "ai" || !["draft", "saved"].includes(media.status) ||
-            !new RegExp("^generated/ai-[a-f0-9-]+\\.jpg$", "i").test(String(media.storage_path || "")) ||
+            !new RegExp("^generated/ai-[a-f0-9-]+\.jpg$", "i").test(String(media.storage_path || "")) ||
             media.file_type !== "image/jpeg") {
           sendJSON(res, 409, { success: false, message: "Cette photo ne peut pas être enregistrée dans la galerie." }); return;
         }
@@ -1718,8 +1718,8 @@ const server = http.createServer(async (req, res) => {
         }
         const media = rows[0];
         if (media.source !== "ai" || !["draft", "saved"].includes(media.status) ||
-            !new RegExp("^generated/ai-[a-f0-9-]+\\.jpg$", "i").test(String(media.storage_path || "")) ||
-            !new RegExp("^ai-[a-f0-9-]+\\.jpg$", "i").test(String(media.file_name || "")) ||
+            !new RegExp("^generated/ai-[a-f0-9-]+\.jpg$", "i").test(String(media.storage_path || "")) ||
+            !new RegExp("^ai-[a-f0-9-]+\.jpg$", "i").test(String(media.file_name || "")) ||
             media.file_type !== "image/jpeg") {
           sendJSON(res, 409, { success: false, message: "Seuls les médias IA en brouillon peuvent être publiés ici." }); return;
         }
