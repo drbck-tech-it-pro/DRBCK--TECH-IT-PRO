@@ -1538,6 +1538,37 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      const mediaPreviewMatch = pathname.match(new RegExp("^/api/admin/media/([0-9a-fA-F-]{36})/preview$"));
+      if (mediaPreviewMatch && req.method === "GET") {
+        const mediaId = mediaPreviewMatch[1];
+        const rows = await supabaseRequest("media_library?select=id,file_name,file_type,storage_path,source,status&id=eq." +
+          encodeURIComponent(mediaId) + "&limit=1");
+        if (!Array.isArray(rows) || !rows.length) {
+          sendJSON(res, 404, { success: false, message: "Image introuvable." }); return;
+        }
+        const media = rows[0];
+        if (media.source !== "ai" || media.status !== "draft" ||
+            !new RegExp("^generated/ai-[a-f0-9-]+\\\\.jpg$", "i").test(String(media.storage_path || "")) ||
+            media.file_type !== "image/jpeg") {
+          sendJSON(res, 409, { success: false, message: "Aperçu réservé aux images IA en brouillon." }); return;
+        }
+        const signed = await fetch(SUPABASE_URL + "/storage/v1/object/sign/admin-media/" +
+          String(media.storage_path).split("/").map(encodeURIComponent).join("/"), {
+            method: "POST",
+            headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
+              "Content-Type": "application/json" },
+            body: JSON.stringify({ expiresIn: 3600 })
+          });
+        const signedData = await signed.json();
+        if (!signed.ok || !signedData.signedURL) {
+          console.error("Création aperçu image IA impossible :", signed.status, signedData);
+          sendJSON(res, 502, { success: false, message: "Impossible de préparer l’aperçu de cette image." }); return;
+        }
+        const previewUrl = signedData.signedURL.startsWith("http") ? signedData.signedURL : SUPABASE_URL + signedData.signedURL;
+        sendJSON(res, 200, { success: true, preview_url: previewUrl });
+        return;
+      }
+
       const mediaPublishMatch = pathname.match(new RegExp("^/api/admin/media/([0-9a-fA-F-]{36})/publish$"));
       if (mediaPublishMatch && req.method === "POST") {
         const mediaId = mediaPublishMatch[1];
