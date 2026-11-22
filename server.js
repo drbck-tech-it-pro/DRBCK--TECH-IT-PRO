@@ -18,7 +18,7 @@ const sessions = new Map();
 const rateLimits = new Map();
 
 const SESSION_DURATION = 8 * 60 * 60 * 1000;
-const MAX_BODY_SIZE = 2 * 1024 * 1024;
+const MAX_BODY_SIZE = 8 * 1024 * 1024;
 
 // --------------------------------------------------
 // REPONSES JSON
@@ -1375,6 +1375,35 @@ const server = http.createServer(async (req, res) => {
 
 
 
+
+      // TELEVERSEMENT SECURISE DES PHOTOS PRODUITS ET SERVICES
+      if (req.method === "POST" && pathname === "/api/admin/media/upload-image") {
+        const body = await readBody(req);
+        const kind = body.kind === "service" ? "services" : body.kind === "product" ? "products" : null;
+        if (!kind) { sendJSON(res, 400, { success: false, message: "Type de photo invalide." }); return; }
+        const match = String(body.image_data || "").match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+        if (!match) { sendJSON(res, 400, { success: false, message: "Fichier image invalide." }); return; }
+        const mime = match[1];
+        const fileBuffer = Buffer.from(match[2], "base64");
+        if (!fileBuffer.length || fileBuffer.length > 5 * 1024 * 1024) { sendJSON(res, 413, { success: false, message: "Image trop volumineuse. Maximum : 5 Mo." }); return; }
+        const extension = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" }[mime];
+        const storagePath = "uploads/" + kind + "/" + Date.now() + "-" + crypto.randomBytes(8).toString("hex") + "." + extension;
+        const upload = await fetch(SUPABASE_URL + "/storage/v1/object/services-photos/" + storagePath.split("/").map(encodeURIComponent).join("/"), {
+          method: "POST",
+          headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY, "Content-Type": mime, "x-upsert": "false" },
+          body: fileBuffer
+        });
+        if (!upload.ok) {
+          const detail = await upload.text();
+          console.error("Échec téléversement photo produit/service :", upload.status, detail);
+          sendJSON(res, 502, { success: false, message: "Impossible d’enregistrer la photo. Vérifie le stockage Supabase services-photos." });
+          return;
+        }
+        const publicUrl = SUPABASE_URL + "/storage/v1/object/public/services-photos/" + storagePath.split("/").map(encodeURIComponent).join("/");
+        await writeAdminHistory(admin, "image.uploaded", kind === "products" ? "product_image" : "service_image", storagePath, { mime_type: mime, size_bytes: fileBuffer.length });
+        sendJSON(res, 201, { success: true, message: "Photo envoyée.", public_url: publicUrl, storage_path: storagePath });
+        return;
+      }
 
       const mediaPublishMatch = pathname.match(new RegExp("^/api/admin/media/([0-9a-fA-F-]{36})/publish$"));
       if (mediaPublishMatch && req.method === "POST") {
