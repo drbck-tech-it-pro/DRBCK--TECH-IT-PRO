@@ -1596,7 +1596,7 @@ const server = http.createServer(async (req, res) => {
         }
         const media = rows[0];
         if (media.source !== "ai" || media.status !== "draft" ||
-            !/^generated\\/ai-[a-f0-9-]+\\.jpg$/i.test(String(media.storage_path || "")) ||
+            !new RegExp("^generated/ai-[a-f0-9-]+\\.jpg$", "i").test(String(media.storage_path || "")) ||
             media.file_type !== "image/jpeg") {
           sendJSON(res, 409, { success: false, message: "Cette photo ne peut pas être enregistrée dans la galerie." }); return;
         }
