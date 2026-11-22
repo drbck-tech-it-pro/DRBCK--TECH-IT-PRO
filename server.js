@@ -1823,11 +1823,15 @@ const server = http.createServer(async (req, res) => {
               return;
             }
           }
-          if (Object.prototype.hasOwnProperty.call(updates, "stock") && updates.stock !== null && updates.stock !== "") {
-            updates.stock = Number(updates.stock);
-            if (!Number.isInteger(updates.stock) || updates.stock < 0) {
-              sendJSON(res, 400, { success: false, message: "Stock invalide." });
-              return;
+          if (Object.prototype.hasOwnProperty.call(updates, "stock")) {
+            if (updates.stock === "" || updates.stock === null || updates.stock === undefined) {
+              updates.stock = null;
+            } else {
+              updates.stock = Number(updates.stock);
+              if (!Number.isInteger(updates.stock) || updates.stock < 0) {
+                sendJSON(res, 400, { success: false, message: "Stock invalide." });
+                return;
+              }
             }
           }
           if (Object.prototype.hasOwnProperty.call(updates, "product_type") && !["digital", "physical"].includes(updates.product_type)) {
