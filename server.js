@@ -201,6 +201,53 @@ async function uploadPrivateInvoice(storagePath, pdfBuffer) {
   if (!response.ok) { console.error("Echec stockage facture :", response.status, await response.text());
     throw new Error("Impossible de stocker le PDF de la facture."); }
 }
+async function createInvoiceForConfirmedOrder(orderId, admin) {
+  const [orders, items, existing] = await Promise.all([
+    supabaseRequest("orders?select=id,order_number,customer_name,customer_email,customer_phone,total_amount,currency,payment_status&id=eq." +
+      encodeURIComponent(orderId) + "&limit=1"),
+    supabaseRequest("order_items?select=item_name,quantity,unit_price,total_price&order_id=eq." +
+      encodeURIComponent(orderId) + "&order=created_at.asc"),
+    supabaseRequest("invoices?select=id,invoice_number,pdf_path,status&order_id=eq." +
+      encodeURIComponent(orderId) + "&limit=1")
+  ]);
+  if (!Array.isArray(orders) || !orders.length) throw new Error("Commande introuvable pour la facture.");
+  const order = orders[0];
+  if (order.payment_status !== "confirmed") throw new Error("Paiement non confirmé : facture non créée.");
+  if (Array.isArray(existing) && existing.length) {
+    return { invoice: existing[0], signed_url: await createInvoiceSignedUrl(existing[0].pdf_path), reused: true };
+  }
+
+  const invoiceNumber = "DRBCK-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-" +
+    crypto.randomBytes(6).toString("hex").toUpperCase();
+  const storagePath = "invoices/" + invoiceNumber + ".pdf";
+  await uploadPrivateInvoice(storagePath, buildInvoicePdf(order, Array.isArray(items) ? items : [], invoiceNumber));
+  try {
+    const created = await supabaseRequest("invoices", { method: "POST", body: {
+      order_id: orderId, invoice_number: invoiceNumber, customer_name: order.customer_name || "Client",
+      customer_email: order.customer_email || null, amount: Number(order.total_amount || 0),
+      currency: order.currency || "USD", pdf_path: storagePath, status: "issued"
+    }});
+    const invoice = Array.isArray(created) ? created[0] : created;
+    if (!invoice || !invoice.id) throw new Error("La facture n'a pas été enregistrée dans la base.");
+    await writeAdminHistory(admin, "invoice.created", "invoice", invoice.id, {
+      order_id: orderId, invoice_number: invoiceNumber, automatic: true
+    });
+    return { invoice, signed_url: await createInvoiceSignedUrl(storagePath), reused: false };
+  } catch (error) {
+    await fetch(SUPABASE_URL + "/storage/v1/object/customer-invoices/" +
+      storagePath.split("/").map(encodeURIComponent).join("/"), {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
+      }).catch(() => {});
+    const alreadyCreated = await supabaseRequest("invoices?select=id,invoice_number,pdf_path,status&order_id=eq." +
+      encodeURIComponent(orderId) + "&limit=1").catch(() => []);
+    if (Array.isArray(alreadyCreated) && alreadyCreated.length) {
+      return { invoice: alreadyCreated[0], signed_url: await createInvoiceSignedUrl(alreadyCreated[0].pdf_path), reused: true };
+    }
+    throw error;
+  }
+}
+
 async function createInvoiceSignedUrl(storagePath) {
   const response = await fetch(SUPABASE_URL + "/storage/v1/object/sign/customer-invoices/" +
     storagePath.split("/").map(encodeURIComponent).join("/"), { method: "POST",
@@ -1124,9 +1171,23 @@ const server = http.createServer(async (req, res) => {
           order_id: payment.order_id, method: payment.method,
           transaction_reference: payment.transaction_reference, verification_note: note
         });
-        sendJSON(res, 200, { success: true, message: decision === "confirmed"
-          ? "Paiement confirmé après vérification manuelle. La commande est maintenant payée."
-          : "Paiement refusé après vérification.", status: decision });
+        let invoiceResult = null;
+        let invoiceWarning = null;
+        if (decision === "confirmed") {
+          try {
+            invoiceResult = await createInvoiceForConfirmedOrder(order.id, admin);
+          } catch (invoiceError) {
+            console.error("Paiement confirmé, mais création automatique de facture échouée :", invoiceError);
+            invoiceWarning = "Paiement confirmé, mais la facture n'a pas pu être créée automatiquement. Réessayez depuis la commande.";
+          }
+        }
+        sendJSON(res, 200, { success: true,
+          message: decision === "confirmed"
+            ? (invoiceWarning || "Paiement confirmé. La facture PDF a été créée automatiquement.")
+            : "Paiement refusé après vérification.",
+          status: decision, invoice: invoiceResult && invoiceResult.invoice || null,
+          invoice_url: invoiceResult && invoiceResult.signed_url || null,
+          invoice_warning: invoiceWarning });
         return;
       }
 
