@@ -86,6 +86,12 @@
       </div>
       <div id="liaCreatorPanel" class="lia-admin-panel">
         <h3>✨ LIA Créatrice</h3>
+        <label for="liaTextProvider">Moteur IA pour les descriptions</label>
+        <select id="liaTextProvider">
+          <option value="groq">Groq (gratuit selon quota)</option>
+          <option value="gemini">Google Gemini (avec repli Groq)</option>
+          <option value="openai">ChatGPT / OpenAI (avec repli Groq)</option>
+        </select>
         <label for="liaCreatorPrompt">Décris le contenu souhaité</label>
         <textarea id="liaCreatorPrompt" maxlength="2500" placeholder="Ex. : visuel professionnel pour une offre de retouche photo, fond bleu, style moderne..."></textarea>
         <div class="lia-admin-actions">
@@ -107,7 +113,7 @@
           <button type="submit" id="liaAdminChatSend">Envoyer</button>
         </form>
       </div>
-      <p class="section-note">La génération d’images dépend du crédit et des accès API OpenAI. La génération vidéo n’est pas activée actuellement.</p>
+      <p class="section-note">Les descriptions peuvent utiliser Groq, Gemini ou OpenAI. Si Gemini ou OpenAI échoue, le serveur essaie Groq. Les clés restent privées dans Render. Les images utilisent Cloudflare ; la vidéo n’est pas encore activée.</p>
     </section>
 
     <div class="card">
@@ -501,7 +507,7 @@ document.getElementById("servicePhoto").addEventListener("input", event => setIm
     try {
       const data = await apiRequest("/api/admin/ai/description", {
         method: "POST",
-        body: JSON.stringify({ kind: "product", prompt: "Rédige une présentation marketing honnête pour ce sujet : " + description })
+        body: JSON.stringify({ kind: "product", provider: document.getElementById("liaTextProvider").value, prompt: "Rédige une présentation marketing honnête pour ce sujet : " + description })
       });
       result.textContent = data.description || "Aucune description reçue.";
     } catch (error) { result.textContent = error.message || "Génération de texte indisponible."; }
@@ -763,7 +769,7 @@ async function generateDescription(kind) {
   try {
     const result = await apiRequest("/api/admin/ai/description", {
       method: "POST",
-      body: JSON.stringify({ kind, prompt: "Nom : " + name + "\\nPrix indiqué : " + price +
+      body: JSON.stringify({ kind, provider: document.getElementById("liaTextProvider").value, prompt: "Nom : " + name + "\\nPrix indiqué : " + price +
         "\\nInformations complémentaires : " + description.value })
     });
     description.value = result.description || "";
