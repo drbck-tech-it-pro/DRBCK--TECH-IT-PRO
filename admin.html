@@ -41,6 +41,10 @@
     .lia-admin-actions{display:flex;gap:8px;flex-wrap:wrap}
     .lia-admin-actions button{flex:1;min-width:140px}
     .lia-admin-preview{display:block;max-width:100%;max-height:360px;margin-top:12px;border-radius:10px}
+    .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-top:14px}
+    .media-card{border:1px solid #dbe3ef;border-radius:12px;padding:10px;background:#fff;min-width:0}
+    .media-thumb{width:100%;height:170px;object-fit:contain;background:#f1f5f9;border-radius:8px;display:block}
+    .media-meta{font-size:12px;color:#64748b;overflow-wrap:anywhere;margin:8px 0}
 
 
     .service h3{margin:0 0 7px}
@@ -844,10 +848,9 @@ function renderSettingsModule(rows, target) {
 function renderMediaModule(rows, target) {
   target.replaceChildren();
   const heading = document.createElement("p");
-  heading.textContent = "Génération d'images IA : les créations sont conservées en brouillon privé et ne sont jamais publiées automatiquement.";
+  heading.textContent = "Bibliothèque des médias : toutes les images enregistrées dans la médiathèque apparaissent ici. Les brouillons restent privés jusqu'à votre validation.";
   const videoNote = document.createElement("p");
-  videoNote.textContent = "Génération vidéo non activée : l'API vidéo Sora d'OpenAI a été arrêtée. Un fournisseur vidéo compatible devra être connecté avant d'activer cette fonction.";
-
+  videoNote.textContent = "Génération vidéo non activée pour le moment.";
   const form = document.createElement("form");
   const prompt = document.createElement("textarea");
   prompt.placeholder = "Décrivez l'image professionnelle à créer...";
@@ -857,12 +860,13 @@ function renderMediaModule(rows, target) {
   button.type = "submit";
   button.textContent = "Générer une image";
   const status = document.createElement("p");
-  const preview = document.createElement("img");
-  preview.alt = "Aperçu de l'image générée";
-  preview.hidden = true;
-  preview.style.maxWidth = "100%";
-  preview.style.borderRadius = "10px";
-  form.append(prompt, button, status, preview);
+  const generatedPreview = document.createElement("img");
+  generatedPreview.alt = "Aperçu de l'image générée";
+  generatedPreview.hidden = true;
+  generatedPreview.style.maxWidth = "100%";
+  generatedPreview.style.maxHeight = "360px";
+  generatedPreview.style.objectFit = "contain";
+  form.append(prompt, button, status, generatedPreview);
   form.addEventListener("submit", async event => {
     event.preventDefault();
     button.disabled = true;
@@ -871,9 +875,10 @@ function renderMediaModule(rows, target) {
       const result = await apiRequest("/api/admin/ai/image", {
         method: "POST", body: JSON.stringify({ prompt: prompt.value.trim() })
       });
-      preview.src = result.preview_url;
-      preview.hidden = false;
+      generatedPreview.src = result.preview_url;
+      generatedPreview.hidden = false;
       status.textContent = result.message || "Image enregistrée en brouillon.";
+      await loadAdminModule("media");
     } catch (error) {
       status.textContent = error.message;
     } finally {
@@ -882,51 +887,57 @@ function renderMediaModule(rows, target) {
   });
   target.append(heading, videoNote, form);
   const listHeading = document.createElement("h4");
-  listHeading.textContent = "Fichiers de la médiathèque";
+  listHeading.textContent = "Toutes les photos de la médiathèque (" + rows.length + ")";
   target.appendChild(listHeading);
   if (!rows.length) {
-    target.appendChild(document.createTextNode("Aucun fichier enregistré."));
+    target.appendChild(document.createTextNode("Aucun fichier enregistré dans la médiathèque."));
     return;
   }
+  const grid = document.createElement("div");
+  grid.className = "media-grid";
   rows.forEach(row => {
     const item = document.createElement("article");
-    item.className = "service";
+    item.className = "media-card";
+    const image = document.createElement("img");
+    image.className = "media-thumb";
+    image.alt = row.file_name || "Photo de la médiathèque";
+    image.loading = "lazy";
+    image.hidden = true;
+    if (row.public_url) {
+      image.src = row.public_url;
+      image.hidden = false;
+    }
     const label = document.createElement("p");
+    label.className = "media-meta";
     label.textContent = (row.file_name || "Fichier") + " · " + (row.file_type || "") +
       " · " + (row.status || "draft") + " · " + (row.source || "upload");
-    item.appendChild(label);
+    item.append(image, label);
     if (row.source === "ai" && row.status === "draft") {
       const previewButton = document.createElement("button");
       previewButton.type = "button";
       previewButton.className = "secondary";
-      previewButton.textContent = "👁 Aperçu de l’image";
-      const imagePreview = document.createElement("img");
-      imagePreview.alt = "Aperçu de l’image IA en brouillon";
-      imagePreview.hidden = true;
-      imagePreview.style.cssText = "display:block;max-width:100%;max-height:420px;object-fit:contain;margin:12px 0;border-radius:10px";
+      previewButton.textContent = "👁 Voir la photo";
       previewButton.addEventListener("click", async () => {
-        if (!imagePreview.hidden) {
-          imagePreview.hidden = true;
-          previewButton.textContent = "👁 Aperçu de l’image";
+        if (!image.hidden) {
+          image.hidden = true;
+          image.removeAttribute("src");
+          previewButton.textContent = "👁 Voir la photo";
           return;
         }
         previewButton.disabled = true;
-        previewButton.textContent = "Chargement de l’aperçu...";
+        previewButton.textContent = "Chargement...";
         try {
           const previewData = await apiRequest("/api/admin/media/" + encodeURIComponent(row.id) + "/preview");
-          imagePreview.src = previewData.preview_url;
-          imagePreview.hidden = false;
-          previewButton.textContent = "Masquer l’aperçu";
+          image.src = previewData.preview_url;
+          image.hidden = false;
+          previewButton.textContent = "Masquer la photo";
         } catch (error) {
           showMessage("moduleMessage", error.message || "Aperçu indisponible.");
-          previewButton.textContent = "👁 Aperçu de l’image";
+          previewButton.textContent = "👁 Voir la photo";
         } finally {
           previewButton.disabled = false;
         }
       });
-      item.appendChild(previewButton);
-      item.appendChild(imagePreview);
-
       const approve = document.createElement("button");
       approve.type = "button";
       approve.textContent = "Valider et publier";
@@ -943,20 +954,20 @@ function renderMediaModule(rows, target) {
           approve.disabled = false;
         }
       });
-      item.appendChild(approve);
+      item.append(previewButton, approve);
     }
     if (row.public_url) {
       const link = document.createElement("a");
       link.href = row.public_url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
-      link.textContent = "Voir le média publié";
+      link.textContent = "Ouvrir l’image";
       item.appendChild(link);
     }
-    target.appendChild(item);
+    grid.appendChild(item);
   });
+  target.appendChild(grid);
 }
-
 async function verifyPayment(paymentId, decision) {
   const actionText = decision === "confirmed" ? "CONFIRMER" : "REFUSER";
   const note = window.prompt("Après avoir vérifié la transaction dans le compte officiel du fournisseur, indiquez la preuve ou le détail de vérification (8 caractères minimum) :");
