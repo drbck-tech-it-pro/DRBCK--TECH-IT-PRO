@@ -77,16 +77,6 @@
   </section>
 
   <section id="dashboard" class="hidden">
-    <div class="card">
-      <div class="topline">
-        <div><h2>Vue d'ensemble</h2><small>Indicateurs récupérés depuis Supabase</small></div>
-        <button type="button" onclick="loadOverview()">Actualiser</button>
-      </div>
-      <div id="overviewMessage" class="message"></div>
-      <div id="overviewStats" class="stats-grid"><div class="stat"><span>Chargement des données...</span></div></div>
-      <p class="section-note">Première version : jusqu'à 1 000 lignes par rubrique. Le montant confirmé additionne uniquement les paiements dont le statut est « confirmed ».</p>
-    </div>
-
     <section class="card" id="liaAdminSection">
       <h2>🤖 Les deux IA — LIA DRBCK TECH</h2>
       <p class="section-note">Espace réservé aux administrateurs. Vérifie les contenus avant toute publication.</p>
@@ -119,6 +109,18 @@
       </div>
       <p class="section-note">La génération d’images dépend du crédit et des accès API OpenAI. La génération vidéo n’est pas activée actuellement.</p>
     </section>
+
+    <div class="card">
+      <div class="topline">
+        <div><h2>Vue d'ensemble</h2><small>Indicateurs récupérés depuis Supabase</small></div>
+        <button type="button" onclick="loadOverview()">Actualiser</button>
+      </div>
+      <div id="overviewMessage" class="message"></div>
+      <div id="overviewStats" class="stats-grid"><div class="stat"><span>Chargement des données...</span></div></div>
+      <p class="section-note">Première version : jusqu'à 1 000 lignes par rubrique. Le montant confirmé additionne uniquement les paiements dont le statut est « confirmed ».</p>
+    </div>
+
+
 
     <div class="card topline">
       <div>
