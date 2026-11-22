@@ -1595,7 +1595,7 @@ const server = http.createServer(async (req, res) => {
           sendJSON(res, 404, { success: false, message: "Photo introuvable dans la médiathèque." }); return;
         }
         const media = rows[0];
-        if (media.source !== "ai" || media.status !== "draft" ||
+        if (media.source !== "ai" || !["draft", "saved"].includes(media.status) ||
             !new RegExp("^generated/ai-[a-f0-9-]+\\.jpg$", "i").test(String(media.storage_path || "")) ||
             media.file_type !== "image/jpeg") {
           sendJSON(res, 409, { success: false, message: "Cette photo ne peut pas être enregistrée dans la galerie." }); return;
