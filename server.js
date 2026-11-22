@@ -1533,6 +1533,18 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         const publicUrl = SUPABASE_URL + "/storage/v1/object/public/services-photos/" + storagePath.split("/").map(encodeURIComponent).join("/");
+        try {
+          await supabaseRequest("media_library", { method: "POST", body: {
+            file_name: storagePath.split("/").pop(),
+            file_type: mime,
+            storage_path: storagePath,
+            public_url: publicUrl,
+            source: "upload",
+            status: "published"
+          }});
+        } catch (error) {
+          console.error("Photo envoyée mais ajout à la médiathèque impossible :", error.message);
+        }
         await writeAdminHistory(admin, "image.uploaded", kind === "products" ? "product_image" : "service_image", storagePath, { mime_type: mime, size_bytes: fileBuffer.length });
         sendJSON(res, 201, { success: true, message: "Photo envoyée.", public_url: publicUrl, storage_path: storagePath });
         return;
