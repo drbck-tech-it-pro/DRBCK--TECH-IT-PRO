@@ -220,6 +220,94 @@
     </p>
   </footer>
 
+
+  <!-- Assistant flottant LIA - DRBCK TECH -->
+  <style>
+    #lia-launcher{position:fixed;right:20px;bottom:20px;z-index:9998;border:0;border-radius:28px;background:#0a66ff;color:#fff;padding:13px 18px;font-weight:700;box-shadow:0 5px 18px #0003;cursor:pointer}
+    #lia-box{position:fixed;right:20px;bottom:78px;width:340px;max-width:calc(100vw - 28px);z-index:9999;background:#fff;border-radius:16px;box-shadow:0 5px 24px #0004;overflow:hidden;font-family:Arial,sans-serif;display:none}
+    #lia-box.lia-open{display:block}
+    #lia-head{background:#0a66ff;color:#fff;padding:12px;display:flex;align-items:center;gap:10px}
+    #lia-avatar{width:36px;height:36px;flex:0 0 36px;border-radius:50%;background:#fff;color:#0a66ff;display:grid;place-items:center;font-size:18px;font-weight:700}
+    #lia-close{margin-left:auto;border:0;background:transparent;color:#fff;font-size:23px;cursor:pointer}
+    #lia-chat{height:290px;overflow-y:auto;padding:12px;background:#f5f7ff;font-size:14px}
+    .lia-message{max-width:88%;padding:9px 11px;border-radius:11px;margin:0 0 9px;white-space:pre-wrap;overflow-wrap:anywhere}
+    .lia-bot{background:#fff;color:#222;margin-right:auto}
+    .lia-user{background:#0a66ff;color:#fff;margin-left:auto}
+    #lia-form{display:flex;gap:6px;padding:9px;background:#fff}
+    #lia-input{min-width:0;flex:1;padding:11px;border:1px solid #ddd;border-radius:22px;font-size:15px}
+    #lia-send{border:0;border-radius:22px;background:#0a66ff;color:#fff;padding:10px 14px;cursor:pointer}
+    #lia-send:disabled{opacity:.6}
+    @media(max-width:420px){#lia-box{right:14px;bottom:76px}}
+  </style>
+  <button id="lia-launcher" type="button" aria-controls="lia-box" aria-expanded="false">💬 Discuter avec LIA</button>
+  <section id="lia-box" aria-label="Discussion avec LIA" aria-hidden="true">
+    <div id="lia-head">
+      <div id="lia-avatar">L</div>
+      <div><strong>LIA - DRBCK TECH</strong><br><small>Assistante en ligne</small></div>
+      <button id="lia-close" type="button" aria-label="Fermer">×</button>
+    </div>
+    <div id="lia-chat" aria-live="polite">
+      <div class="lia-message lia-bot">Bonjour ! Je suis LIA, l’assistante de DRBCK TECH.IT.PRO. 😊\nComment puis-je vous aider ?\n\n• Retouche photo\n• Photo passeport\n• Création d’image\n• Prix et services</div>
+    </div>
+    <form id="lia-form">
+      <input id="lia-input" type="text" maxlength="2000" placeholder="Écrivez votre message..." autocomplete="off" required>
+      <button id="lia-send" type="submit">Envoyer</button>
+    </form>
+  </section>
+  <script>
+    (() => {
+      const launcher = document.getElementById("lia-launcher");
+      const panel = document.getElementById("lia-box");
+      const close = document.getElementById("lia-close");
+      const form = document.getElementById("lia-form");
+      const input = document.getElementById("lia-input");
+      const chat = document.getElementById("lia-chat");
+      const send = document.getElementById("lia-send");
+      const api = "https://drbck-tech-it-pro.onrender.com/api/chat";
+      const setOpen = (open) => {
+        panel.classList.toggle("lia-open", open);
+        panel.setAttribute("aria-hidden", String(!open));
+        launcher.setAttribute("aria-expanded", String(open));
+        if (open) input.focus();
+      };
+      launcher.addEventListener("click", () => setOpen(!panel.classList.contains("lia-open")));
+      close.addEventListener("click", () => setOpen(false));
+      const addMessage = (value, who) => {
+        const node = document.createElement("div");
+        node.className = "lia-message " + (who === "user" ? "lia-user" : "lia-bot");
+        node.textContent = value;
+        chat.appendChild(node);
+        chat.scrollTop = chat.scrollHeight;
+      };
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const message = input.value.trim();
+        if (!message || send.disabled) return;
+        addMessage(message, "user");
+        input.value = "";
+        send.disabled = true;
+        send.textContent = "…";
+        try {
+          const response = await fetch(api, {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({message})
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Service indisponible.");
+          addMessage(data.reply || "Je n’ai pas reçu de réponse. Réessayez.", "bot");
+        } catch (error) {
+          addMessage("L’assistance est momentanément indisponible. Vous pouvez nous écrire sur WhatsApp au +243 972 052 103.", "bot");
+        } finally {
+          send.disabled = false;
+          send.textContent = "Envoyer";
+          input.focus();
+        }
+      });
+    })();
+  </script>
+  <!-- Fin assistant flottant LIA -->
+
   <script src="script.js"></script>
 
   <script>
