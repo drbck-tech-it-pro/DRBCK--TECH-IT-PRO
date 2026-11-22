@@ -1873,7 +1873,7 @@ function organizeAdminInterface() {
   const account = document.createElement("section");
   account.className = "card";
   account.id = "adminAccountSection";
-  account.innerHTML = '<h2>👤 Paramètres de mon compte</h2><p class="section-note">Informations du compte administrateur et sécurité de connexion.</p><div id="adminAccountDetails">Chargement des informations du compte...</div><p class="section-note">La modification sécurisée de l’adresse e-mail, du numéro et du mot de passe sera disponible ici après activation des vérifications nécessaires.</p>';
+  account.innerHTML = '<h2>👤 Paramètres de mon compte</h2><p class="section-note">Consulte et mets à jour les informations de ton compte administrateur.</p><div id="adminAccountDetails" class="section-note">Chargement...</div><form id="adminAccountForm"><label>Nouvelle adresse e-mail</label><input id="accountEmail" type="email" placeholder="nouvelle-adresse@exemple.com" autocomplete="email"><label>Nouveau numéro de téléphone (format international)</label><input id="accountPhone" type="tel" placeholder="+243..." autocomplete="tel"><label>Nouveau mot de passe</label><input id="accountPassword" type="password" minlength="8" placeholder="Au moins 8 caractères" autocomplete="new-password"><button type="submit" id="saveAccountButton">Enregistrer les modifications</button></form><div id="accountMessage" class="message"></div><p class="section-note">Pour protéger ton compte, Supabase peut demander une confirmation par e-mail ou SMS avant de valider les nouvelles coordonnées.</p>';
   addGroup("👤 Mon compte et sécurité", "adminAccountGroup", [account, accountTop]);
 
   // Retirer l'ancien conteneur IA qui ne sert plus qu'à héberger les panneaux déplacés.
@@ -1901,6 +1901,45 @@ function organizeAdminInterface() {
     if (target) target.scrollIntoView({behavior:"smooth",block:"start"});
   }));
   document.getElementById("adminMenuLogout")?.addEventListener("click", () => logout());
+
+  async function loadAccountSettings() {
+    const box = document.getElementById("adminAccountDetails");
+    try {
+      const data = await apiRequest("/api/admin/account");
+      const a = data.account || {};
+      box.innerHTML = '<div class="stat"><span>Nom du compte</span><strong style="font-size:16px">' +
+        escapeAdminText(a.full_name || "Administrateur") + '</strong></div><div class="stat"><span>E-mail actuel</span><strong style="font-size:16px">' +
+        escapeAdminText(a.email || "Non renseigné") + '</strong><span>' + (a.email_confirmed ? "Confirmé" : "À confirmer") +
+        '</span></div><div class="stat"><span>Téléphone actuel</span><strong style="font-size:16px">' +
+        escapeAdminText(a.phone || "Non renseigné") + '</strong><span>' + (a.phone_confirmed ? "Confirmé" : "À confirmer") + '</span></div>';
+    } catch (error) { box.textContent = error.message; }
+  }
+  function escapeAdminText(value) {
+    return String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+  }
+  loadAccountSettings();
+  document.getElementById("adminAccountForm")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = document.getElementById("saveAccountButton");
+    const payload = {
+      email: document.getElementById("accountEmail").value.trim(),
+      phone: document.getElementById("accountPhone").value.trim(),
+      password: document.getElementById("accountPassword").value
+    };
+    if (!payload.email && !payload.phone && !payload.password) {
+      showMessage("accountMessage", "Saisis au moins une information à modifier.");
+      return;
+    }
+    button.disabled = true;
+    button.textContent = "Enregistrement...";
+    try {
+      const result = await apiRequest("/api/admin/account", {method:"PATCH",body:JSON.stringify(payload)});
+      showMessage("accountMessage", result.message || "Modifications envoyées.", "success");
+      document.getElementById("accountPassword").value = "";
+      await loadAccountSettings();
+    } catch (error) { showMessage("accountMessage", error.message); }
+    finally { button.disabled = false; button.textContent = "Enregistrer les modifications"; }
+  });
 }
 
 // DEMARRAGE
