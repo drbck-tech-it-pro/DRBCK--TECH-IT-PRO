@@ -58,14 +58,48 @@
     .topline button{width:auto;padding:10px 16px}
     small{color:#64748b}
     @media(max-width:550px){.actions{flex-direction:column}.topline{align-items:flex-start;flex-direction:column}.topline button{width:100%}}
+  
+    header{display:flex;align-items:center;justify-content:space-between;gap:14px;position:sticky;top:0;z-index:100}
+    .brand{display:flex;align-items:center;gap:12px;min-width:0}
+    .brand-logo{width:46px;height:46px;object-fit:cover;border-radius:50%;background:#fff;border:2px solid #ffffff55}
+    .brand-copy h1{margin:0;font-size:19px}.brand-copy p{margin:5px 0 0}
+    #adminMenuButton{width:auto;min-width:54px;margin:0;padding:12px 16px;font-size:24px;background:#2563eb;border:1px solid #ffffff55}
+    #adminMenuPanel{display:none;background:#fff;position:fixed;z-index:99;top:78px;right:12px;width:min(340px,calc(100vw - 24px));max-height:calc(100vh - 95px);overflow:auto;padding:14px;border-radius:14px;box-shadow:0 12px 35px #0004}
+    #adminMenuPanel.open{display:block}
+    #adminMenuPanel h3{margin:8px 8px;color:#14213d}
+    #adminMenuPanel button{margin:4px 0;text-align:left;background:#f1f5f9;color:#172033;border:1px solid #e2e8f0}
+    #adminMenuPanel button.menu-danger{background:#fee2e2;color:#991b1b}
+    #adminHome{display:grid;gap:16px}
+    #adminHome .card{margin-bottom:0}
+    #adminHome .card>h2{font-size:19px}
+    #adminHome .lia-admin-chat{height:300px}
+    #adminOtherSections{display:none}
+    #adminOtherSections.visible{display:block}
+    .admin-menu-heading{margin:22px 0 10px;padding:10px 12px;background:#e8eef8;border-radius:9px;color:#1e3a5f;font-size:16px}
+    @media(max-width:550px){header{padding:12px}.brand-logo{width:40px;height:40px}.brand-copy h1{font-size:16px}.brand-copy p{font-size:12px}}
+
   </style>
 </head>
 <body>
 
 <header>
-  <h1>DRBCK TECH.IT.PRO</h1>
-  <p>Administration — Service rapide et fiable à Likasi</p>
+  <div class="brand">
+    <img class="brand-logo" src="logo.jpg" alt="Logo DRBCK TECH.IT.PRO" onerror="this.style.display='none'">
+    <div class="brand-copy"><h1>DRBCK TECH.IT.PRO</h1><p>Administration — Service rapide et fiable à Likasi</p></div>
+  </div>
+  <button type="button" id="adminMenuButton" aria-label="Ouvrir le menu" aria-expanded="false">☰</button>
 </header>
+<nav id="adminMenuPanel" aria-label="Menu administration">
+  <h3>☰ MENU ADMINISTRATION</h3>
+  <button type="button" data-target="adminHome">🏠 Accueil</button>
+  <button type="button" data-target="adminServicesEditor">🛠️ Ajouter / gérer les services</button>
+  <button type="button" data-target="adminProductsEditor">🛍️ Ajouter / gérer les produits</button>
+  <button type="button" data-target="adminAISection">🤖 Générateurs IA et médiathèque</button>
+  <button type="button" data-target="adminOverviewSection">📊 Statistiques et tableau de bord</button>
+  <button type="button" data-target="adminOperationsSection">📦 Commandes, paiements, clients et factures</button>
+  <button type="button" data-target="adminAccountSection">👤 Paramètres de mon compte</button>
+  <button type="button" id="adminMenuLogout" class="menu-danger">🚪 Déconnexion</button>
+</nav>
 
 <main>
 
@@ -402,6 +436,7 @@ async function checkSession() {
 async function openDashboard(profile) {
   loginSection.classList.add("hidden");
   dashboard.classList.remove("hidden");
+  organizeAdminInterface();
 
   if (profile && profile.full_name) {
     document.getElementById("adminInfo").textContent =
@@ -1775,6 +1810,97 @@ async function deleteService(id) {
   } catch (error) {
     showMessage("serviceMessage", error.message);
   }
+}
+
+
+/* ORGANISATION DE L'INTERFACE ADMIN — accueil épuré et menu ☰ */
+let adminInterfaceOrganized = false;
+function organizeAdminInterface() {
+  if (adminInterfaceOrganized) return;
+  adminInterfaceOrganized = true;
+
+  const home = document.createElement("div");
+  home.id = "adminHome";
+  const other = document.createElement("div");
+  other.id = "adminOtherSections";
+  dashboard.prepend(home);
+  dashboard.appendChild(other);
+
+  const cards = [...dashboard.querySelectorAll(":scope > .card, :scope > section.card")];
+  const lia = document.getElementById("liaAdminSection");
+  const creator = document.getElementById("liaCreatorPanel");
+  const assistant = document.getElementById("liaAssistantPanel");
+  const serviceEditor = document.getElementById("serviceForm")?.closest(".card");
+  const serviceList = document.getElementById("servicesList")?.closest(".card");
+  const productEditor = document.getElementById("productForm")?.closest(".card");
+  const overview = document.getElementById("overviewStats")?.closest(".card");
+  const operations = document.getElementById("moduleData")?.closest(".card");
+  const accountTop = [...dashboard.querySelectorAll(".card")].find(el => el.querySelector("#adminInfo"));
+
+  // Accueil : uniquement les listes de services/produits et une conversation IA.
+  if (serviceList) home.appendChild(serviceList);
+  const productList = document.createElement("section");
+  productList.className = "card";
+  productList.id = "adminProductListCard";
+  productList.innerHTML = '<div class="topline"><h2>🛍️ Produits</h2><button type="button" onclick="loadProducts()">Actualiser</button></div>';
+  const productsList = document.getElementById("productsList");
+  const productListHeader = productsList?.previousElementSibling;
+  if (productsList) productList.appendChild(productsList);
+  if (productListHeader && productListHeader.classList.contains("topline")) productListHeader.remove();
+  home.appendChild(productList);
+
+  const chatCard = document.createElement("section");
+  chatCard.className = "card";
+  chatCard.id = "adminHomeChat";
+  chatCard.innerHTML = '<h2>💬 Mon intelligence artificielle</h2><p class="section-note">Discute, pose tes questions et échange tes idées avec ton assistant DRBCK TECH.</p>';
+  if (assistant) chatCard.appendChild(assistant);
+  home.appendChild(chatCard);
+
+  // Rubriques rangées dans le menu.
+  function addGroup(title, id, nodes) {
+    const group = document.createElement("section");
+    group.id = id;
+    group.innerHTML = '<h2 class="admin-menu-heading">' + title + '</h2>';
+    nodes.filter(Boolean).forEach(node => group.appendChild(node));
+    other.appendChild(group);
+  }
+  addGroup("🛠️ Gestion et création des services", "adminServicesEditor", [serviceEditor]);
+  addGroup("🛍️ Gestion et création des produits", "adminProductsEditor", [productEditor]);
+  addGroup("🤖 Intelligence artificielle et médias", "adminAISection", [creator ? creator.closest("#liaCreatorPanel") : null]);
+  if (overview) addGroup("📊 Statistiques", "adminOverviewSection", [overview]);
+  if (operations) addGroup("📦 Outils et opérations", "adminOperationsSection", [operations]);
+
+  const account = document.createElement("section");
+  account.className = "card";
+  account.id = "adminAccountSection";
+  account.innerHTML = '<h2>👤 Paramètres de mon compte</h2><p class="section-note">Informations du compte administrateur et sécurité de connexion.</p><div id="adminAccountDetails">Chargement des informations du compte...</div><p class="section-note">La modification sécurisée de l’adresse e-mail, du numéro et du mot de passe sera disponible ici après activation des vérifications nécessaires.</p>';
+  addGroup("👤 Mon compte et sécurité", "adminAccountGroup", [account, accountTop]);
+
+  // Retirer l'ancien conteneur IA qui ne sert plus qu'à héberger les panneaux déplacés.
+  if (lia) lia.remove();
+
+  // Le menu affiche une seule rubrique à la fois.
+  const menu = document.getElementById("adminMenuPanel");
+  const menuButton = document.getElementById("adminMenuButton");
+  menuButton?.addEventListener("click", () => {
+    const opened = menu.classList.toggle("open");
+    menuButton.setAttribute("aria-expanded", String(opened));
+  });
+  menu?.querySelectorAll("[data-target]").forEach(button => button.addEventListener("click", () => {
+    const targetId = button.dataset.target;
+    menu.classList.remove("open");
+    if (targetId === "adminHome") {
+      other.classList.remove("visible");
+      home.style.display = "grid";
+      home.scrollIntoView({behavior:"smooth",block:"start"});
+      return;
+    }
+    home.style.display = "none";
+    other.classList.add("visible");
+    const target = document.getElementById(targetId);
+    if (target) target.scrollIntoView({behavior:"smooth",block:"start"});
+  }));
+  document.getElementById("adminMenuLogout")?.addEventListener("click", () => logout());
 }
 
 // DEMARRAGE
