@@ -198,6 +198,14 @@
         <input type="hidden" id="productId">
         <label>Nom du produit</label>
         <input id="productName" required>
+        <div class="lia-admin-panel" style="margin:12px 0">
+          <h3>✨ Générer un produit avec DRBCK TECH IA</h3>
+          <p class="section-note">Saisis le nom et le prix ci-dessus, puis l’IA rédige la description et crée une image. Tu peux aussi choisir ta propre photo.</p>
+          <button type="button" id="generateFullProduct">✨ Générer description + photo</button>
+          <div id="productAiStatus" class="section-note" aria-live="polite"></div>
+          <img id="productAiPreview" class="lia-admin-preview hidden" alt="Aperçu de la photo du produit générée">
+          <button type="button" class="secondary" id="openProductGallery" hidden>🖼️ Ouvrir la médiathèque pour vérifier et publier</button>
+        </div>
         <label>Description</label>
         <textarea id="productDescription"></textarea>
         <button type="button" class="secondary" onclick="generateDescription('product')">Rédiger avec DRBCK TECH IA</button>
@@ -769,6 +777,66 @@ async function loadAdminModule(name) {
   }
 }
 
+
+let generatedProductMediaId = "";
+
+document.getElementById("generateFullProduct").addEventListener("click", async () => {
+  const name = document.getElementById("productName").value.trim();
+  const price = document.getElementById("productPrice").value.trim();
+  const status = document.getElementById("productAiStatus");
+  const button = document.getElementById("generateFullProduct");
+  const preview = document.getElementById("productAiPreview");
+  const galleryButton = document.getElementById("openProductGallery");
+  if (!name || price === "" || !Number.isFinite(Number(price)) || Number(price) < 0) {
+    showMessage("productMessage", "Saisis d'abord le nom du produit et son prix en dollars.");
+    return;
+  }
+  button.disabled = true;
+  galleryButton.hidden = true;
+  preview.classList.add("hidden");
+  generatedProductMediaId = "";
+  try {
+    status.textContent = "Étape 1/2 : rédaction de la description...";
+    const description = await apiRequest("/api/admin/ai/description", {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "product",
+        provider: document.getElementById("liaTextProvider").value,
+        prompt: "Nom du produit : " + name + "\nPrix fourni : " + price + " USD. Rédige une description commerciale honnête sans inventer de caractéristiques techniques."
+      })
+    });
+    document.getElementById("productDescription").value = description.description || "";
+    status.textContent = "Étape 2/2 : création de la photo du produit...";
+    const image = await apiRequest("/api/admin/ai/image", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "cloudflare",
+        prompt: "Photographie commerciale réaliste d'un produit nommé " + name +
+          ". Image de catalogue e-commerce, produit seul, bien éclairé, fond propre et neutre, cadrage professionnel. Ne pas ajouter de texte, de logo ni de prix. Image illustrative, ne pas inventer de marque ou de détails spécifiques."
+      })
+    });
+    generatedProductMediaId = image.media && image.media.id ? image.media.id : "";
+    if (!generatedProductMediaId || !image.preview_url) throw new Error("Image créée, mais aperçu indisponible. Vérifie la médiathèque.");
+    preview.src = image.preview_url;
+    preview.classList.remove("hidden");
+    const saved = await apiRequest("/api/admin/media/" + encodeURIComponent(generatedProductMediaId) + "/save", {
+      method: "POST", body: JSON.stringify({})
+    });
+    status.textContent = "Produit préparé : description rédigée et photo enregistrée dans la galerie privée. Rien n'est publié.";
+    galleryButton.hidden = false;
+    showMessage("productMessage", saved.message || "Brouillon produit enregistré. Vérifie-le avant publication.", "success");
+  } catch (error) {
+    status.textContent = error.message || "La génération du produit a échoué.";
+    showMessage("productMessage", status.textContent);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.getElementById("openProductGallery").addEventListener("click", async () => {
+  await loadAdminModule("media");
+  document.getElementById("moduleTitle").scrollIntoView({ behavior: "smooth", block: "center" });
+});
 
 async function generateDescription(kind) {
   const isService = kind === "service";
