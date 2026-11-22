@@ -1862,9 +1862,29 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (req.method === "DELETE") {
-          await supabaseRequest("products?id=eq." + encodeURIComponent(productId), { method: "DELETE", prefer: "return=minimal" });
-          await writeAdminHistory(admin, "product.deleted", "product", productId);
-          sendJSON(res, 200, { success: true, message: "Produit supprimé." });
+          // La suppression est définitive et indépendante de la case "Produit actif".
+          // Vérifier que Supabase a réellement supprimé une ligne avant de confirmer.
+          const deletedProducts = await supabaseRequest(
+            "products?id=eq." + encodeURIComponent(productId) + "&select=id,name",
+            { method: "DELETE", prefer: "return=representation" }
+          );
+
+          if (!Array.isArray(deletedProducts) || deletedProducts.length === 0) {
+            sendJSON(res, 404, {
+              success: false,
+              message: "Produit introuvable ou non supprimé dans la base de données."
+            });
+            return;
+          }
+
+          await writeAdminHistory(admin, "product.deleted", "product", productId, {
+            name: deletedProducts[0].name || null
+          });
+          sendJSON(res, 200, {
+            success: true,
+            message: "Produit supprimé définitivement de la base de données.",
+            deleted_id: deletedProducts[0].id
+          });
           return;
         }
       }
