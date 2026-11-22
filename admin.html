@@ -944,18 +944,19 @@ function renderMediaModule(rows, target) {
         previewButton.textContent = "Chargement...";
         try {
           const previewData = await apiRequest("/api/admin/media/" + encodeURIComponent(row.id) + "/preview");
+          if (!previewData.preview_data_url) throw new Error("Le serveur n'a pas renvoyé les données de l'image.");
           const testImage = new Image();
           testImage.onload = () => {
-            image.src = previewData.preview_url;
+            image.src = previewData.preview_data_url;
             image.hidden = false;
             previewButton.textContent = "Masquer la photo";
           };
           testImage.onerror = () => {
             image.hidden = true;
-            showMessage("moduleMessage", "Le lien d’aperçu est prêt, mais le fichier image ne se charge pas. Vérifiez le stockage privé admin-media.");
+            showMessage("moduleMessage", "Les données de l'image ont été reçues, mais le navigateur ne peut pas afficher ce fichier JPEG.");
             previewButton.textContent = "👁 Réessayer l’aperçu";
           };
-          testImage.src = previewData.preview_url;
+          testImage.src = previewData.preview_data_url;
         } catch (error) {
           showMessage("moduleMessage", error.message || "Aperçu indisponible.");
           previewButton.textContent = "👁 Voir la photo";
