@@ -504,13 +504,25 @@ document.getElementById("productForm").addEventListener("submit", async event =>
 
 async function deleteProduct(id) {
   if (!id || !confirm("Supprimer définitivement ce produit ?")) return;
+  const removeButtons = document.querySelectorAll("#productsList button");
+  removeButtons.forEach(button => { button.disabled = true; });
   try {
     await apiRequest("/api/admin/products/" + encodeURIComponent(id), { method: "DELETE" });
-    showMessage("productMessage", "Produit supprimé.", "success");
+
+    // Effacer aussi le formulaire si le produit supprimé y était chargé.
+    if (document.getElementById("productId").value === id) {
+      resetProductForm();
+    }
+
+    // Recharger la liste et les indicateurs après la suppression.
     await loadProducts();
     await loadOverview();
+    showMessage("productMessage", "Produit supprimé et liste actualisée.", "success");
   } catch (error) {
     showMessage("productMessage", error.message);
+    await loadProducts().catch(() => {});
+  } finally {
+    removeButtons.forEach(button => { button.disabled = false; });
   }
 }
 
