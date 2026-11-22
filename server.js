@@ -11,8 +11,9 @@ const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || "";
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-6-astra";
+const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ""; // Conservée uniquement pour la génération d’images.
 
 const sessions = new Map();
 const rateLimits = new Map();
@@ -1525,21 +1526,21 @@ const server = http.createServer(async (req, res) => {
         const prompt = String(body.prompt || "").trim().slice(0, 2000);
         const kind = body.kind === "service" ? "service informatique" : "produit";
         if (!prompt) { sendJSON(res, 400, { success: false, message: "Décrivez le produit ou le service." }); return; }
-        if (!OPENAI_API_KEY) { sendJSON(res, 503, { success: false, message: "La clé OpenAI n'est pas configurée." }); return; }
-        const response = await fetch("https://api.openai.com/v1/responses", {
+        if (!GROQ_API_KEY) { sendJSON(res, 503, { success: false, message: "La clé OpenAI n'est pas configurée." }); return; }
+        const response = await fetch("https://api.groq.com/openai/v1/responses", {
           method: "POST",
-          headers: { "Authorization": "Bearer " + OPENAI_API_KEY, "Content-Type": "application/json" },
+          headers: { "Authorization": "Bearer " + GROQ_API_KEY, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: OPENAI_MODEL,
+            model: GROQ_MODEL,
             instructions: "Tu es l'assistant rédactionnel interne de DRBCK TECH.IT.PRO à Likasi. Rédige en français une description claire, professionnelle et honnête. N'invente aucune caractéristique, garantie, compatibilité ou prix. Réponds uniquement par la description prête à publier.",
             input: "Type : " + kind + "\nInformations fournies : " + prompt
           })
         });
         const data = await response.json();
         if (!response.ok) {
-          console.error("Erreur IA description :", response.status, data);
+          console.error("Erreur Groq description :", response.status, data);
           sendJSON(res, response.status === 429 ? 503 : 502, { success: false,
-            message: "Génération indisponible. Vérifiez le crédit et les autorisations du compte OpenAI." }); return;
+            message: "Génération indisponible. Vérifiez la clé Groq et les limites gratuites du compte." }); return;
         }
         const description = extractOpenAIText(data);
         if (!description) { sendJSON(res, 502, { success: false, message: "Aucune description reçue." }); return; }
@@ -2083,7 +2084,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      if (!OPENAI_API_KEY) {
+      if (!GROQ_API_KEY) {
         sendJSON(res, 500, {
           success: false,
           message: "Le service IA n'est pas configuré."
@@ -2096,28 +2097,28 @@ const server = http.createServer(async (req, res) => {
 
       const instructions = buildAIInstructions(services);
 
-      const openAIResponse = await fetch(
-        "https://api.openai.com/v1/responses",
+      const groqResponse = await fetch(
+        "https://api.groq.com/openai/v1/responses",
         {
           method: "POST",
 
           headers: {
-            "Authorization": "Bearer " + OPENAI_API_KEY,
+            "Authorization": "Bearer " + GROQ_API_KEY,
             "Content-Type": "application/json"
           },
 
           body: JSON.stringify({
-            model: OPENAI_MODEL,
+            model: GROQ_MODEL,
             instructions: instructions,
             input: message
           })
         }
       );
 
-      const aiData = await openAIResponse.json();
+      const aiData = await groqResponse.json();
 
-      if (!openAIResponse.ok) {
-        console.error("Erreur OpenAI :", aiData);
+      if (!groqResponse.ok) {
+        console.error("Erreur Groq :", aiData);
 
         sendJSON(res, 502, {
           success: false,
