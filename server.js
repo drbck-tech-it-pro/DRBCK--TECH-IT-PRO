@@ -1082,6 +1082,87 @@ const server = http.createServer(async (req, res) => {
       }
 
       // --------------------------------------------
+      // PARAMETRES DU COMPTE ADMINISTRATEUR
+      // --------------------------------------------
+      if (req.method === "GET" && pathname === "/api/admin/account") {
+        sendJSON(res, 200, {
+          success: true,
+          account: {
+            email: admin.user.email || "",
+            phone: admin.user.phone || "",
+            email_confirmed: Boolean(admin.user.email_confirmed_at),
+            phone_confirmed: Boolean(admin.user.phone_confirmed_at),
+            full_name: admin.profile.full_name || ""
+          }
+        });
+        return;
+      }
+
+      if (req.method === "PATCH" && pathname === "/api/admin/account") {
+        const body = await readBody(req);
+        const updates = {};
+        if (typeof body.email === "string" && body.email.trim()) {
+          const email = body.email.trim().toLowerCase();
+          if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+            sendJSON(res, 400, { success: false, message: "Adresse e-mail invalide." });
+            return;
+          }
+          updates.email = email;
+        }
+        if (typeof body.phone === "string" && body.phone.trim()) {
+          const phone = body.phone.trim().replace(/[\\s().-]/g, "");
+          if (!/^\\+[1-9]\\d{7,14}$/.test(phone)) {
+            sendJSON(res, 400, { success: false, message: "Numéro invalide. Utilise le format international, par exemple +243..." });
+            return;
+          }
+          updates.phone = phone;
+        }
+        if (typeof body.password === "string" && body.password) {
+          if (body.password.length < 8) {
+            sendJSON(res, 400, { success: false, message: "Le mot de passe doit contenir au moins 8 caractères." });
+            return;
+          }
+          updates.password = body.password;
+        }
+        if (!Object.keys(updates).length) {
+          sendJSON(res, 400, { success: false, message: "Indique au moins une information à modifier." });
+          return;
+        }
+        const changed = await fetch(SUPABASE_URL + "/auth/v1/user", {
+          method: "PUT",
+          headers: {
+            "apikey": SUPABASE_PUBLISHABLE_KEY,
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(updates)
+        });
+        const changedData = await changed.json().catch(() => ({}));
+        if (!changed.ok) {
+          sendJSON(res, changed.status, {
+            success: false,
+            message: changedData.msg || changedData.message || changedData.error_description || "Impossible de modifier le compte."
+          });
+          return;
+        }
+        await writeAdminHistory(admin, "account.updated", "admin_account", admin.user.id, {
+          changed_fields: Object.keys(updates).filter(key => key !== "password")
+            .concat(updates.password ? ["password"] : [])
+        });
+        sendJSON(res, 200, {
+          success: true,
+          message: "Demande de mise à jour envoyée. Si l’e-mail ou le téléphone change, confirme le code ou le lien envoyé par Supabase.",
+          account: {
+            email: changedData.email || admin.user.email || "",
+            phone: changedData.phone || admin.user.phone || "",
+            email_confirmed: Boolean(changedData.email_confirmed_at),
+            phone_confirmed: Boolean(changedData.phone_confirmed_at)
+          }
+        });
+        return;
+      }
+
+      // --------------------------------------------
       // VUE D'ENSEMBLE ADMINISTRATEUR
       // --------------------------------------------
 
