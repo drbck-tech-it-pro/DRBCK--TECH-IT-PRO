@@ -103,6 +103,7 @@
   <button type="button" data-target="adminAISection">🤖 Générateurs IA et médiathèque</button>
   <button type="button" data-target="adminOverviewSection">📊 Statistiques et tableau de bord</button>
   <button type="button" data-target="adminOperationsSection">📦 Commandes, paiements, clients et factures</button>
+  <button type="button" data-target="adminTrashSection">🗑️ Corbeille</button>
   <button type="button" data-target="adminAccountSection">👤 Paramètres de mon compte</button>
   <button type="button" id="adminMenuLogout" class="menu-danger">🚪 Déconnexion</button>
 </nav>
@@ -1194,6 +1195,23 @@ function renderMediaModule(rows, target) {
       });
       item.append(previewButton, approve);
     }
+    const trashMedia = document.createElement("button");
+    trashMedia.type = "button";
+    trashMedia.className = "danger";
+    trashMedia.textContent = "🗑 Déplacer dans la corbeille";
+    trashMedia.addEventListener("click", async () => {
+      if (!confirm("Déplacer cette photo dans la corbeille ?")) return;
+      trashMedia.disabled = true;
+      try {
+        const result = await apiRequest("/api/admin/media/" + encodeURIComponent(row.id), { method: "DELETE" });
+        showMessage("moduleMessage", result.message || "Photo déplacée dans la corbeille.", "success");
+        await loadAdminModule("media");
+      } catch (error) {
+        showMessage("moduleMessage", error.message);
+        trashMedia.disabled = false;
+      }
+    });
+    item.appendChild(trashMedia);
     if (row.public_url) {
       const link = document.createElement("a");
       link.href = row.public_url;
@@ -1206,6 +1224,68 @@ function renderMediaModule(rows, target) {
   });
   galleryArea.appendChild(grid);
 }
+async function loadAdminTrash() {
+  const box = document.getElementById("adminTrashList");
+  if (!box) return;
+  box.textContent = "Chargement de la corbeille...";
+  try {
+    const data = await apiRequest("/api/admin/trash");
+    const rows = Array.isArray(data.trash) ? data.trash : [];
+    box.replaceChildren();
+    if (!rows.length) {
+      box.textContent = "La corbeille est vide.";
+      return;
+    }
+    rows.forEach(row => {
+      const card = document.createElement("article");
+      card.className = "service";
+      const title = document.createElement("h3");
+      const payload = row.payload || {};
+      title.textContent = row.entity_type === "service" ? (payload.nom || "Service") :
+        row.entity_type === "product" ? (payload.name || "Produit") : (payload.file_name || "Photo");
+      const meta = document.createElement("p");
+      meta.textContent = (row.entity_type === "service" ? "Service" : row.entity_type === "product" ? "Produit" : "Photo") +
+        " · Supprimé le " + (row.deleted_at ? new Date(row.deleted_at).toLocaleString("fr-FR") : "date inconnue");
+      const restore = document.createElement("button");
+      restore.type = "button";
+      restore.textContent = "↩ Restaurer";
+      restore.addEventListener("click", async () => {
+        if (!confirm("Restaurer cet élément ?")) return;
+        restore.disabled = true;
+        try {
+          const result = await apiRequest("/api/admin/trash/" + encodeURIComponent(row.id), { method: "POST", body: JSON.stringify({}) });
+          showMessage("moduleMessage", result.message || "Élément restauré.", "success");
+          await loadAdminTrash();
+          await Promise.all([loadServices(), loadProducts(), loadOverview()]);
+        } catch (error) {
+          showMessage("moduleMessage", error.message);
+          restore.disabled = false;
+        }
+      });
+      const permanent = document.createElement("button");
+      permanent.type = "button";
+      permanent.className = "danger";
+      permanent.textContent = "🗑 Supprimer définitivement";
+      permanent.addEventListener("click", async () => {
+        if (!confirm("ATTENTION : cette suppression sera irréversible. Continuer ?")) return;
+        permanent.disabled = true;
+        try {
+          const result = await apiRequest("/api/admin/trash/" + encodeURIComponent(row.id), { method: "DELETE" });
+          showMessage("moduleMessage", result.message || "Suppression définitive effectuée.", "success");
+          await loadAdminTrash();
+        } catch (error) {
+          showMessage("moduleMessage", error.message);
+          permanent.disabled = false;
+        }
+      });
+      card.append(title, meta, restore, permanent);
+      box.appendChild(card);
+    });
+  } catch (error) {
+    box.textContent = "Impossible de charger la corbeille : " + error.message;
+  }
+}
+
 async function verifyPayment(paymentId, decision) {
   const actionText = decision === "confirmed" ? "CONFIRMER" : "REFUSER";
   const note = window.prompt("Après avoir vérifié la transaction dans le compte officiel du fournisseur, indiquez la preuve ou le détail de vérification (8 caractères minimum) :");
@@ -1881,6 +1961,12 @@ function organizeAdminInterface() {
   account.id = "adminAccountSection";
   account.innerHTML = '<h2>👤 Paramètres de mon compte</h2><p class="section-note">Consulte et mets à jour les informations de ton compte administrateur.</p><a class="admin-menu-public-link" href="https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/" target="_blank" rel="noopener noreferrer">🌐 Accéder directement à mon site public ↗</a><div id="adminAccountDetails" class="section-note">Chargement...</div><form id="adminAccountForm"><label>Nouvelle adresse e-mail</label><input id="accountEmail" type="email" placeholder="nouvelle-adresse@exemple.com" autocomplete="email"><label>Nouveau numéro de téléphone (format international)</label><input id="accountPhone" type="tel" placeholder="+243..." autocomplete="tel"><label>Nouveau mot de passe</label><input id="accountPassword" type="password" minlength="8" placeholder="Au moins 8 caractères" autocomplete="new-password"><button type="submit" id="saveAccountButton">Enregistrer les modifications</button></form><div id="accountMessage" class="message"></div><p class="section-note">Pour protéger ton compte, Supabase peut demander une confirmation par e-mail ou SMS avant de valider les nouvelles coordonnées.</p>';
   addGroup("👤 Mon compte et sécurité", "adminAccountGroup", [account, accountTop]);
+  const trashSection = document.createElement("section");
+  trashSection.id = "adminTrashSection";
+  trashSection.className = "card";
+  trashSection.innerHTML = '<h2>🗑️ Corbeille</h2><p class="section-note">Les services, produits et photos supprimés restent ici. Tu peux les restaurer ou les supprimer définitivement.</p><div id="adminTrashList">Chargement...</div><button type="button" id="refreshAdminTrash">Actualiser la corbeille</button>';
+  other.appendChild(trashSection);
+  document.getElementById("refreshAdminTrash")?.addEventListener("click", loadAdminTrash);
 
   // Retirer l'ancien conteneur IA qui ne sert plus qu'à héberger les panneaux déplacés.
   if (lia) lia.remove();
@@ -1903,6 +1989,7 @@ function organizeAdminInterface() {
     }
     home.style.display = "none";
     other.classList.add("visible");
+    if (targetId === "adminTrashSection") loadAdminTrash();
     const target = document.getElementById(targetId);
     if (target) target.scrollIntoView({behavior:"smooth",block:"start"});
   }));
