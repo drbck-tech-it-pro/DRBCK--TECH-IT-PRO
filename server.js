@@ -1119,7 +1119,7 @@ const server = http.createServer(async (req, res) => {
           const media = item.payload || {};
           const storagePath = String(media.storage_path || "");
           if (storagePath) {
-            const bucket = String(media.public_url || "").includes("/public/services-photos/") ? "services-photos" : "admin-media";
+            const bucket = (media.status === "published" || (media.source !== "ai" && media.source !== "generated")) ? "services-photos" : "admin-media";
             const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/");
             const storageDelete = await fetch(SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + encodedPath, {
               method: "DELETE",
