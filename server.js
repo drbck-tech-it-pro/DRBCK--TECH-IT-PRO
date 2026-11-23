@@ -1081,6 +1081,91 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // GENERATION AUTOMATIQUE D'UNE PHOTO POUR LE PROCHAIN SERVICE SANS PHOTO
+      if (req.method === "POST" && pathname === "/api/admin/services/generate-missing-photo") {
+        const pending = await supabaseRequest(
+          "services?select=id,nom,description,photo_url,actif,publication_status&actif=eq.true&publication_status=eq.published&or=(photo_url.is.null,photo_url.eq.)&order=id.asc&limit=1"
+        );
+        if (!Array.isArray(pending) || !pending.length) {
+          sendJSON(res, 200, { success: true, done: true, message: "Tous les services publiés possèdent déjà une photo.", remaining: 0 });
+          return;
+        }
+        if (!checkRateLimit("admin-ai-image:" + admin.user.id, 3, 60 * 60 * 1000)) {
+          sendJSON(res, 429, { success: false, message: "Limite de 3 images par heure atteinte. Les autres photos pourront être générées après le renouvellement du quota." });
+          return;
+        }
+        if (!CLOUDFLARE_ACCOUNT_ID || !CLOUDFLARE_API_TOKEN) {
+          sendJSON(res, 503, { success: false, message: "La génération d'images n'est pas configurée dans Render." });
+          return;
+        }
+        const service = pending[0];
+        const prompt = "Create a premium realistic commercial photograph for an IT repair and computer services company in Likasi, Democratic Republic of Congo. Subject: " +
+          String(service.nom || "IT service") + ". Context: " + String(service.description || "professional computer and smartphone technical support") +
+          ". Show the relevant equipment and technician workspace, clean modern composition, professional blue and neutral tones, natural studio lighting, realistic photography, no text, no letters, no logos, no watermark. Landscape 4:3 composition.";
+        const generated = await fetch(
+          "https://api.cloudflare.com/client/v4/accounts/" + encodeURIComponent(CLOUDFLARE_ACCOUNT_ID) +
+          "/ai/run/@cf/black-forest-labs/flux-1-schnell",
+          { method: "POST", headers: { "Authorization": "Bearer " + CLOUDFLARE_API_TOKEN, "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt, steps: 4 }) }
+        );
+        const imageData = await generated.json().catch(() => ({}));
+        if (!generated.ok || imageData.success === false) {
+          console.error("Erreur Cloudflare photo service :", generated.status, imageData);
+          sendJSON(res, generated.status === 429 ? 503 : 502, { success: false, message: "La génération de la photo a échoué. Vérifiez le quota et les permissions Cloudflare." });
+          return;
+        }
+        const encoded = imageData && imageData.result && imageData.result.image ? imageData.result.image : imageData && imageData.image;
+        if (typeof encoded !== "string" || !encoded) {
+          sendJSON(res, 502, { success: false, message: "Cloudflare n'a pas renvoyé d'image exploitable." });
+          return;
+        }
+        const imageBuffer = Buffer.from(encoded, "base64");
+        if (!imageBuffer.length || imageBuffer.length > 12 * 1024 * 1024) {
+          sendJSON(res, 502, { success: false, message: "Taille de photo invalide." });
+          return;
+        }
+        const fileName = "service-" + service.id + "-" + crypto.randomUUID() + ".jpg";
+        const storagePath = "ai-services/" + fileName;
+        const upload = await fetch(SUPABASE_URL + "/storage/v1/object/services-photos/" +
+          storagePath.split("/").map(encodeURIComponent).join("/"), {
+            method: "POST", headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
+              "Content-Type": "image/jpeg", "x-upsert": "false" }, body: imageBuffer
+          });
+        if (!upload.ok) {
+          console.error("Echec publication photo service :", upload.status, await upload.text());
+          sendJSON(res, 502, { success: false, message: "Photo créée, mais impossible de la publier dans le stockage public." });
+          return;
+        }
+        const publicUrl = SUPABASE_URL + "/storage/v1/object/public/services-photos/" +
+          storagePath.split("/").map(encodeURIComponent).join("/");
+        try {
+          await supabaseRequest("services?id=eq." + encodeURIComponent(service.id), {
+            method: "PATCH", body: { photo_url: publicUrl }
+          });
+          await supabaseRequest("media_library", { method: "POST", body: {
+            file_name: fileName, file_type: "image/jpeg", storage_path: storagePath,
+            public_url: publicUrl, source: "ai", status: "published"
+          }, prefer: "return=minimal" });
+        } catch (error) {
+          await fetch(SUPABASE_URL + "/storage/v1/object/services-photos/" +
+            storagePath.split("/").map(encodeURIComponent).join("/"), {
+              method: "DELETE", headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
+            }).catch(() => {});
+          throw error;
+        }
+        const remainingRows = await supabaseRequest(
+          "services?select=id&actif=eq.true&publication_status=eq.published&or=(photo_url.is.null,photo_url.eq.)"
+        );
+        await writeAdminHistory(admin, "service.photo.generated_and_published", "service", service.id, {
+          service_name: service.nom, photo_url: publicUrl, provider: "cloudflare"
+        });
+        sendJSON(res, 201, { success: true, done: !remainingRows || !remainingRows.length,
+          service: { id: service.id, nom: service.nom }, photo_url: publicUrl,
+          remaining: Array.isArray(remainingRows) ? remainingRows.length : null,
+          message: "Photo générée et publiée automatiquement pour « " + String(service.nom || "Service").slice(0, 120) + " »." });
+        return;
+      }
+
       // --------------------------------------------
       // CORBEILLE ADMINISTRATEUR — accès réservé à l'administrateur
       // --------------------------------------------
