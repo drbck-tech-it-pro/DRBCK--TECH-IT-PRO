@@ -1082,6 +1082,83 @@ const server = http.createServer(async (req, res) => {
       }
 
       // --------------------------------------------
+      // CORBEILLE ADMINISTRATEUR — accès réservé à l'administrateur
+      // --------------------------------------------
+      if (req.method === "GET" && pathname === "/api/admin/trash") {
+        const rows = await supabaseRequest("admin_trash?select=*&order=deleted_at.desc&limit=500");
+        sendJSON(res, 200, { success: true, trash: Array.isArray(rows) ? rows : [] });
+        return;
+      }
+
+      const trashMatch = pathname.match(/^\/api\/admin\/trash\/([0-9a-fA-F-]{36})$/);
+      if (trashMatch && req.method === "POST") {
+        const trashId = trashMatch[1];
+        const rows = await supabaseRequest("admin_trash?select=id,entity_type,original_id,payload&id=eq." + encodeURIComponent(trashId) + "&limit=1");
+        if (!Array.isArray(rows) || !rows.length) {
+          sendJSON(res, 404, { success: false, message: "Élément introuvable dans la corbeille." });
+          return;
+        }
+        const item = rows[0];
+        const table = item.entity_type === "service" ? "services" : item.entity_type === "product" ? "products" : "media_library";
+        const restored = await supabaseRequest(table, { method: "POST", body: item.payload, prefer: "return=representation" });
+        await supabaseRequest("admin_trash?id=eq." + encodeURIComponent(trashId), { method: "DELETE", prefer: "return=minimal" });
+        await writeAdminHistory(admin, item.entity_type + ".restored", item.entity_type, item.original_id, {});
+        sendJSON(res, 200, { success: true, message: "Élément restauré avec succès.", restored });
+        return;
+      }
+
+      if (trashMatch && req.method === "DELETE") {
+        const trashId = trashMatch[1];
+        const rows = await supabaseRequest("admin_trash?select=id,entity_type,original_id,payload&id=eq." + encodeURIComponent(trashId) + "&limit=1");
+        if (!Array.isArray(rows) || !rows.length) {
+          sendJSON(res, 404, { success: false, message: "Élément introuvable dans la corbeille." });
+          return;
+        }
+        const item = rows[0];
+        if (item.entity_type === "media") {
+          const media = item.payload || {};
+          const storagePath = String(media.storage_path || "");
+          if (storagePath) {
+            const bucket = String(media.public_url || "").includes("/public/services-photos/") ? "services-photos" : "admin-media";
+            const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/");
+            const storageDelete = await fetch(SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + encodedPath, {
+              method: "DELETE",
+              headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
+            });
+            if (!storageDelete.ok && storageDelete.status !== 404) {
+              const detail = await storageDelete.text();
+              throw new Error("Impossible de supprimer définitivement le fichier média : " + detail.slice(0, 250));
+            }
+          }
+        }
+        await supabaseRequest("admin_trash?id=eq." + encodeURIComponent(trashId), { method: "DELETE", prefer: "return=minimal" });
+        await writeAdminHistory(admin, item.entity_type + ".permanently_deleted", item.entity_type, item.original_id, {});
+        sendJSON(res, 200, { success: true, message: "Suppression définitive effectuée." });
+        return;
+      }
+
+      async function moveToAdminTrash(entityType, table, originalId, displayField) {
+        const found = await supabaseRequest(table + "?select=*&id=eq." + encodeURIComponent(originalId) + "&limit=1");
+        if (!Array.isArray(found) || !found.length) return null;
+        const snapshot = found[0];
+        await supabaseRequest("admin_trash", {
+          method: "POST",
+          body: { entity_type: entityType, original_id: String(originalId), payload: snapshot, deleted_by: admin.user.id || null }
+        });
+        const removed = await supabaseRequest(table + "?id=eq." + encodeURIComponent(originalId), {
+          method: "DELETE", prefer: "return=representation"
+        });
+        if (!Array.isArray(removed) || !removed.length) {
+          await supabaseRequest("admin_trash?entity_type=eq." + entityType + "&original_id=eq." + encodeURIComponent(originalId), { method: "DELETE", prefer: "return=minimal" });
+          return null;
+        }
+        await writeAdminHistory(admin, entityType + ".trashed", entityType, originalId, {
+          name: snapshot[displayField] || snapshot.file_name || null
+        });
+        return snapshot;
+      }
+
+      // --------------------------------------------
       // PARAMETRES DU COMPTE ADMINISTRATEUR
       // --------------------------------------------
       if (req.method === "GET" && pathname === "/api/admin/account") {
@@ -1397,6 +1474,18 @@ const server = http.createServer(async (req, res) => {
         const row = Array.isArray(saved) ? saved[0] : saved;
         await writeAdminHistory(admin, "setting.updated", "setting", settingKey, { fields: Object.keys(safeValue) });
         sendJSON(res, 200, { success: true, message: "Réglages enregistrés.", setting: row });
+        return;
+      }
+
+      const mediaDeleteMatch = pathname.match(/^\/api\/admin\/media\/([0-9a-fA-F-]{36})$/);
+      if (mediaDeleteMatch && req.method === "DELETE") {
+        const mediaId = mediaDeleteMatch[1];
+        const trashed = await moveToAdminTrash("media", "media_library", mediaId, "file_name");
+        if (!trashed) {
+          sendJSON(res, 404, { success: false, message: "Photo introuvable." });
+          return;
+        }
+        sendJSON(res, 200, { success: true, message: "Photo déplacée dans la corbeille." });
         return;
       }
 
@@ -2140,29 +2229,12 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (req.method === "DELETE") {
-          // La suppression est définitive et indépendante de la case "Produit actif".
-          // Vérifier que Supabase a réellement supprimé une ligne avant de confirmer.
-          const deletedProducts = await supabaseRequest(
-            "products?id=eq." + encodeURIComponent(productId) + "&select=id,name",
-            { method: "DELETE", prefer: "return=representation" }
-          );
-
-          if (!Array.isArray(deletedProducts) || deletedProducts.length === 0) {
-            sendJSON(res, 404, {
-              success: false,
-              message: "Produit introuvable ou non supprimé dans la base de données."
-            });
+          const trashed = await moveToAdminTrash("product", "products", productId, "name");
+          if (!trashed) {
+            sendJSON(res, 404, { success: false, message: "Produit introuvable." });
             return;
           }
-
-          await writeAdminHistory(admin, "product.deleted", "product", productId, {
-            name: deletedProducts[0].name || null
-          });
-          sendJSON(res, 200, {
-            success: true,
-            message: "Produit supprimé définitivement de la base de données.",
-            deleted_id: deletedProducts[0].id
-          });
+          sendJSON(res, 200, { success: true, message: "Produit déplacé dans la corbeille.", deleted_id: productId });
           return;
         }
       }
@@ -2301,20 +2373,12 @@ const server = http.createServer(async (req, res) => {
         // ------------------------------------------
 
         if (req.method === "DELETE") {
-          await supabaseRequest(
-            "services?id=eq." + encodeURIComponent(serviceId),
-            {
-              method: "DELETE",
-              prefer: "return=minimal"
-            }
-          );
-
-          await writeAdminHistory(admin, "service.deleted", "service", serviceId);
-          sendJSON(res, 200, {
-            success: true,
-            message: "Service supprimé."
-          });
-
+          const trashed = await moveToAdminTrash("service", "services", serviceId, "nom");
+          if (!trashed) {
+            sendJSON(res, 404, { success: false, message: "Service introuvable." });
+            return;
+          }
+          sendJSON(res, 200, { success: true, message: "Service déplacé dans la corbeille." });
           return;
         }
       }
