@@ -236,6 +236,7 @@
     <div class="card">
       <div class="topline">
         <h2>Liste des services</h2>
+        <button type="button" class="secondary" id="generateMissingServicePhotos" onclick="generateMissingServicePhotos()">✨ Générer automatiquement les photos manquantes</button>
         <button onclick="loadServices()">Actualiser</button>
       </div>
       <div id="servicesList">Chargement des services...</div>
@@ -1903,6 +1904,41 @@ async function loadServices() {
 
   } catch (error) {
     list.textContent = error.message;
+  }
+}
+
+// GENERER AUTOMATIQUEMENT LES PHOTOS MANQUANTES DES SERVICES EXISTANTS
+async function generateMissingServicePhotos() {
+  const button = document.getElementById("generateMissingServicePhotos");
+  const list = document.getElementById("servicesList");
+  button.disabled = true;
+  let created = 0;
+  let remaining = null;
+  try {
+    for (let i = 0; i < 3; i++) {
+      button.textContent = "⏳ Génération en cours (" + (i + 1) + "/3)…";
+      const result = await apiRequest("/api/admin/services/generate-missing-photo", { method: "POST", body: "{}" });
+      if (result.done) {
+        remaining = 0;
+        break;
+      }
+      created++;
+      remaining = result.remaining;
+      list.insertAdjacentHTML("afterbegin",
+        '<p class="message success">' + escapeHtml(result.message || "Photo publiée.") + '</p>');
+      if (remaining === 0) break;
+    }
+    const suffix = remaining === 0 ? " Tous les services ont maintenant une photo." :
+      " Il reste " + (remaining == null ? "des" : remaining) + " service(s) à illustrer. Le quota autorise 3 images par heure.";
+    showMessage("serviceMessage", created + " photo(s) générée(s) et publiée(s)." + suffix, "success");
+    await loadServices();
+  } catch (error) {
+    const suffix = created ? " " + created + " photo(s) ont déjà été publiées. " : "";
+    showMessage("serviceMessage", suffix + error.message, "error");
+    await loadServices();
+  } finally {
+    button.disabled = false;
+    button.textContent = "✨ Générer automatiquement les photos manquantes";
   }
 }
 
