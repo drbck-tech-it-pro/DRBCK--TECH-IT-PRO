@@ -99,29 +99,38 @@
   <button type="button" id="adminMenuButton" aria-label="Ouvrir les paramètres et outils" aria-expanded="false">⋮</button>
 </header>
 <nav id="adminMenuPanel" aria-label="Paramètres et outils administrateur">
-  <h3>⚙️ PARAMÈTRES & OUTILS</h3>
+  <h3>⚙️ MENU ADMINISTRATEUR</h3>
   <div class="admin-menu-group">
-    <h4>Navigation</h4>
-    <button type="button" data-target="adminHome">🏠 Accueil — services et produits</button>
-    <a class="admin-menu-public-link" href="https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/" target="_blank" rel="noopener noreferrer">🌐 Ouvrir le site public ↗</a>
+    <h4>1 — Paramètres du compte</h4>
+    <button type="button" data-target="adminAccountSection">👤 Paramètres — mon compte</button>
+    <button type="button" data-target="adminAccountSection">✉️ E-mail, téléphone et mot de passe</button>
+    <button type="button" data-module="settings">⚙️ Paramètres généraux du site</button>
   </div>
   <div class="admin-menu-group">
-    <h4>Intelligence artificielle</h4>
-    <button type="button" data-target="adminAISection">✨ Générer des images</button>
-    <button type="button" data-target="adminAISection">📝 Générer des descriptions</button>
-    <button type="button" data-target="adminAISection">🎬 Outils vidéo</button>
-    <button type="button" data-target="adminAISection">🖼️ Médiathèque et brouillons</button>
+    <h4>2 — Intelligence artificielle</h4>
+    <button type="button" data-target="adminAISection">📸 Générateur d’images</button>
+    <button type="button" data-target="adminAISection">📝 Générateur de descriptions</button>
+    <button type="button" data-target="adminAISection">🎬 Générateur de vidéos</button>
+    <button type="button" data-target="adminAISection">🤖 Les 4 moteurs IA et leurs réglages</button>
   </div>
   <div class="admin-menu-group">
-    <h4>Gestion</h4>
-    <button type="button" data-target="adminOverviewSection">📊 Statistiques</button>
-    <button type="button" data-target="adminOperationsSection">📦 Commandes, paiements et factures</button>
+    <h4>3 — Fichiers et contenus</h4>
+    <button type="button" data-module="media">🖼️ Médiathèque — images et brouillons</button>
+    <button type="button" data-target="adminHome">🛍️ Services et produits</button>
     <button type="button" data-target="adminTrashSection">🗑️ Corbeille</button>
   </div>
   <div class="admin-menu-group">
-    <h4>Compte administrateur</h4>
-    <button type="button" data-target="adminAccountSection">👤 Paramètres complets du compte</button>
-    <button type="button" data-target="adminAccountSection">🔐 Adresse e-mail, téléphone et mot de passe</button>
+    <h4>4 — Gestion commerciale</h4>
+    <button type="button" data-target="adminOverviewSection">📊 Statistiques</button>
+    <button type="button" data-module="orders">📦 Commandes</button>
+    <button type="button" data-module="payments">💳 Paiements</button>
+    <button type="button" data-module="invoices">🧾 Factures</button>
+    <button type="button" data-module="customers">👥 Clients</button>
+  </div>
+  <div class="admin-menu-group">
+    <h4>5 — Navigation</h4>
+    <button type="button" data-target="adminHome">🏠 Accueil administratif</button>
+    <a class="admin-menu-public-link" href="https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/" target="_blank" rel="noopener noreferrer">🌐 OUVRIR LE SITE PUBLIC ↗</a>
   </div>
   <button type="button" id="adminMenuLogout" class="menu-danger">🚪 Déconnexion</button>
 </nav>
@@ -155,13 +164,13 @@
         <h3>✨ LIA Créatrice</h3>
         <label for="liaTextProvider">Moteur IA pour les descriptions</label>
         <select id="liaTextProvider">
-          <option value="groq">Groq (gratuit selon quota)</option>
-          <option value="gemini">Google Gemini (avec repli Groq)</option>
-          <option value="openai">ChatGPT / OpenAI (avec repli Groq)</option>
+          <option value="groq">Groq — rédaction rapide</option>
+          <option value="gemini">Google Gemini — rédaction avancée (repli Groq)</option>
+          <option value="openai">OpenAI — rédaction et assistant (repli Groq)</option>
         </select>
         <label for="liaImageProvider">Moteur IA pour les images</label>
         <select id="liaImageProvider">
-          <option value="cloudflare">Cloudflare Workers AI</option>
+          <option value="cloudflare">Cloudflare Workers AI — images</option>
         </select>
         <p class="section-note">Les images sont générées par Cloudflare Workers AI et enregistrées en brouillon privé. Elles ne sont jamais publiées automatiquement.</p>
         <label for="liaCreatorPrompt">Décris le contenu souhaité</label>
@@ -185,7 +194,7 @@
           <button type="submit" id="liaAdminChatSend">Envoyer</button>
         </form>
       </div>
-      <p class="section-note">Descriptions : Groq, Gemini ou OpenAI avec repli Groq. Images : Cloudflare Workers AI. Les clés restent privées dans Render. Toute création reste en brouillon jusqu’à validation manuelle ; la génération vidéo n’est pas encore activée.</p>
+      <div class="card" style="margin-top:14px"><h3>🔌 Les 4 moteurs IA intégrés</h3><ol><li><strong>Groq</strong> : génération de textes et descriptions.</li><li><strong>Google Gemini</strong> : génération de textes et descriptions.</li><li><strong>OpenAI</strong> : génération de textes et assistant.</li><li><strong>Cloudflare Workers AI</strong> : génération d’images.</li></ol><p class="section-note">Les trois moteurs de texte sont sélectionnables ci-dessus. Cloudflare est le moteur d’images. Les clés API restent privées sur Render. Les créations restent en brouillon jusqu’à validation manuelle. Le générateur vidéo nécessite encore un fournisseur vidéo et une clé dédiés : le bouton ne sera pas présenté comme opérationnel tant que ce branchement n’est pas fait.</p></div>
     </section>
 
     <div class="card">
@@ -777,7 +786,7 @@ const adminModules = {
   history: { title: "Historique administratif", path: "/api/admin/history", field: "history" },
   shipments: { title: "Livraisons", path: "/api/admin/shipments", field: "shipments" },
   paymentMethods: { title: "Moyens de paiement configurés", path: "/api/admin/payment-methods", field: "paymentMethods" },
-  events: { title: "Activité du site", path: "/api/admin/events", field: "events" }
+  events: { title: "Activité du site", path: "/api/admin/events", field: "events" },\n  settings: { title: "Paramètres généraux du site", path: "/api/admin/settings", field: "settings" }
 };
 
 function exportAdminRowsCSV(rows, moduleName) {
@@ -2157,6 +2166,17 @@ function organizeAdminInterface() {
     if (targetId === "adminTrashSection") loadAdminTrash();
     const target = document.getElementById(targetId);
     if (target) target.scrollIntoView({behavior:"smooth",block:"start"});
+  }));
+  menu?.querySelectorAll("[data-module]").forEach(button => button.addEventListener("click", async () => {
+    const moduleName = button.dataset.module;
+    menu.classList.remove("open");
+    menuButton?.setAttribute("aria-expanded", "false");
+    home.style.display = "none";
+    other.classList.add("visible");
+    const operations = document.getElementById("adminOperationsSection");
+    if (operations) operations.scrollIntoView({behavior:"smooth",block:"start"});
+    await loadAdminModule(moduleName);
+    document.getElementById("moduleTitle")?.scrollIntoView({behavior:"smooth",block:"center"});
   }));
   document.getElementById("adminMenuLogout")?.addEventListener("click", () => logout());
 
