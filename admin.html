@@ -66,14 +66,19 @@
     .brand{display:flex;align-items:center;gap:12px;min-width:0}
     .brand-logo{width:46px;height:46px;object-fit:cover;border-radius:50%;background:#fff;border:2px solid #ffffff55}
     .brand-copy h1{margin:0;font-size:19px}.brand-copy p{margin:5px 0 0}
-    #adminMenuButton{width:auto;min-width:54px;margin:0;padding:12px 16px;font-size:24px;background:#2563eb;border:1px solid #ffffff55}
-    #adminMenuPanel{display:none;background:#fff;position:fixed;z-index:99;top:78px;right:12px;width:min(340px,calc(100vw - 24px));max-height:calc(100vh - 95px);overflow:auto;padding:14px;border-radius:14px;box-shadow:0 12px 35px #0004}
+    #adminMenuButton{width:46px;height:46px;min-width:46px;margin:0;padding:0;font-size:30px;line-height:1;background:#fff;color:#14213d;border:1px solid #dbe3ef;border-radius:50%;box-shadow:0 2px 8px #0002}
+    #adminMenuButton:hover{background:#eef2ff}
+    #adminMenuPanel{display:none;background:#fff;position:fixed;z-index:999;top:72px;right:12px;width:min(360px,calc(100vw - 24px));max-height:calc(100vh - 88px);overflow:auto;padding:16px;border-radius:16px;box-shadow:0 14px 40px #0003;border:1px solid #e2e8f0}
     #adminMenuPanel.open{display:block}
-    #adminMenuPanel h3{margin:8px 8px;color:#14213d}
-    #adminMenuPanel button{margin:4px 0;text-align:left;background:#f1f5f9;color:#172033;border:1px solid #e2e8f0}
+    #adminMenuPanel h3{margin:4px 4px 14px;color:#14213d;font-size:17px}
+    #adminMenuPanel .admin-menu-group{padding:10px 0;border-top:1px solid #e5eaf1}
+    #adminMenuPanel .admin-menu-group h4{margin:2px 8px 8px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+    #adminMenuPanel button{display:block;width:100%;margin:5px 0;text-align:left;background:#f8fafc;color:#172033;border:1px solid #e2e8f0;border-radius:9px;padding:11px 12px}
+    #adminMenuPanel button:hover{background:#eef2ff}
     #adminMenuPanel button.menu-danger{background:#fee2e2;color:#991b1b}
-    .admin-menu-public-link{display:block;margin:5px 0;padding:12px;border-radius:8px;background:#dcfce7;color:#166534;text-decoration:none;font-weight:800;border:1px solid #86efac}
+    .admin-menu-public-link{display:block;margin:5px 0;padding:12px;border-radius:9px;background:#dcfce7;color:#166534;text-decoration:none;font-weight:800;border:1px solid #86efac}
     #adminHome{display:grid;gap:16px}
+    #adminHome .card{margin-bottom:0}
     #adminHome .card{margin-bottom:0}
     #adminHome .card>h2{font-size:19px}
     #adminHome .lia-admin-chat{height:300px}
@@ -91,20 +96,33 @@
     <img class="brand-logo" src="logo.jpg" alt="Logo DRBCK TECH.IT.PRO" onerror="this.style.display='none'">
     <div class="brand-copy"><h1>DRBCK TECH.IT.PRO</h1><p>Administration — Service rapide et fiable à Likasi</p></div>
   </div>
-  <a id="adminPublicSiteLink" class="admin-public-link" href="https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/" target="_blank" rel="noopener noreferrer">🌐 Site public ↗</a>
-  <button type="button" id="adminMenuButton" aria-label="Ouvrir le menu" aria-expanded="false">☰</button>
+  <button type="button" id="adminMenuButton" aria-label="Ouvrir les paramètres et outils" aria-expanded="false">⋮</button>
 </header>
-<nav id="adminMenuPanel" aria-label="Menu administration">
-  <h3>☰ MENU ADMINISTRATION</h3>
-  <button type="button" data-target="adminHome">🏠 Accueil</button>
-  <a class="admin-menu-public-link" href="https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/" target="_blank" rel="noopener noreferrer">🌐 Ouvrir le site public ↗</a>
-  <button type="button" data-target="adminServicesEditor">🛠️ Ajouter / gérer les services</button>
-  <button type="button" data-target="adminProductsEditor">🛍️ Ajouter / gérer les produits</button>
-  <button type="button" data-target="adminAISection">🤖 Générateurs IA et médiathèque</button>
-  <button type="button" data-target="adminOverviewSection">📊 Statistiques et tableau de bord</button>
-  <button type="button" data-target="adminOperationsSection">📦 Commandes, paiements, clients et factures</button>
-  <button type="button" data-target="adminTrashSection">🗑️ Corbeille</button>
-  <button type="button" data-target="adminAccountSection">👤 Paramètres de mon compte</button>
+<nav id="adminMenuPanel" aria-label="Paramètres et outils administrateur">
+  <h3>⚙️ PARAMÈTRES & OUTILS</h3>
+  <div class="admin-menu-group">
+    <h4>Navigation</h4>
+    <button type="button" data-target="adminHome">🏠 Accueil — services et produits</button>
+    <a class="admin-menu-public-link" href="https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/" target="_blank" rel="noopener noreferrer">🌐 Ouvrir le site public ↗</a>
+  </div>
+  <div class="admin-menu-group">
+    <h4>Intelligence artificielle</h4>
+    <button type="button" data-target="adminAISection">✨ Générer des images</button>
+    <button type="button" data-target="adminAISection">📝 Générer des descriptions</button>
+    <button type="button" data-target="adminAISection">🎬 Outils vidéo</button>
+    <button type="button" data-target="adminAISection">🖼️ Médiathèque et brouillons</button>
+  </div>
+  <div class="admin-menu-group">
+    <h4>Gestion</h4>
+    <button type="button" data-target="adminOverviewSection">📊 Statistiques</button>
+    <button type="button" data-target="adminOperationsSection">📦 Commandes, paiements et factures</button>
+    <button type="button" data-target="adminTrashSection">🗑️ Corbeille</button>
+  </div>
+  <div class="admin-menu-group">
+    <h4>Compte administrateur</h4>
+    <button type="button" data-target="adminAccountSection">👤 Mon compte</button>
+    <button type="button" data-target="adminAccountSection">🔐 Sécurité et coordonnées</button>
+  </div>
   <button type="button" id="adminMenuLogout" class="menu-danger">🚪 Déconnexion</button>
 </nav>
 
@@ -2053,7 +2071,6 @@ function organizeAdminInterface() {
   dashboard.prepend(home);
   dashboard.appendChild(other);
 
-  const cards = [...dashboard.querySelectorAll(":scope > .card, :scope > section.card")];
   const lia = document.getElementById("liaAdminSection");
   const creator = document.getElementById("liaCreatorPanel");
   const assistant = document.getElementById("liaAssistantPanel");
@@ -2064,17 +2081,11 @@ function organizeAdminInterface() {
   const operations = document.getElementById("moduleData")?.closest(".card");
   const accountTop = [...dashboard.querySelectorAll(".card")].find(el => el.querySelector("#adminInfo"));
 
-  // Accueil : uniquement la gestion des services et un seul assistant IA.
+  // Accueil : services, produits et un seul assistant conversationnel.
+  if (serviceEditor) home.appendChild(serviceEditor);
   if (serviceList) home.appendChild(serviceList);
+  if (productEditor) home.appendChild(productEditor);
 
-  const chatCard = document.createElement("section");
-  chatCard.className = "card";
-  chatCard.id = "adminHomeChat";
-  chatCard.innerHTML = '<h2>🤖 DRBCK TECH IA</h2><p class="section-note">Ton assistant intelligent réservé à l’administration.</p>';
-  if (assistant) { assistant.classList.remove("hidden"); chatCard.appendChild(assistant); }
-  home.appendChild(chatCard);
-
-  // La liste des produits reste dans sa rubrique dédiée, jamais sur l’accueil.
   const productList = document.createElement("section");
   productList.className = "card";
   productList.id = "adminProductListCard";
@@ -2083,8 +2094,15 @@ function organizeAdminInterface() {
   const productListHeader = productsList?.previousElementSibling;
   if (productsList) productList.appendChild(productsList);
   if (productListHeader && productListHeader.classList.contains("topline")) productListHeader.remove();
+  home.appendChild(productList);
 
-  // Rubriques rangées dans le menu.
+  const chatCard = document.createElement("section");
+  chatCard.className = "card";
+  chatCard.id = "adminHomeChat";
+  chatCard.innerHTML = '<h2>🤖 DRBCK TECH IA</h2><p class="section-note">Un seul assistant pour discuter et échanger des idées.</p>';
+  if (assistant) { assistant.classList.remove("hidden"); chatCard.appendChild(assistant); }
+  home.appendChild(chatCard);
+
   function addGroup(title, id, nodes) {
     const group = document.createElement("section");
     group.id = id;
@@ -2092,37 +2110,42 @@ function organizeAdminInterface() {
     nodes.filter(Boolean).forEach(node => group.appendChild(node));
     other.appendChild(group);
   }
-  addGroup("🛠️ Gestion et création des services", "adminServicesEditor", [serviceEditor]);
-  addGroup("🛍️ Gestion et création des produits", "adminProductsEditor", [productEditor, productList]);
-  addGroup("🤖 Intelligence artificielle et médias", "adminAISection", [creator ? creator.closest("#liaCreatorPanel") : null]);
+
+  addGroup("✨ Génération IA, descriptions, images et vidéos", "adminAISection", [creator]);
   if (overview) addGroup("📊 Statistiques", "adminOverviewSection", [overview]);
-  if (operations) addGroup("📦 Outils et opérations", "adminOperationsSection", [operations]);
+  if (operations) addGroup("📦 Commandes, paiements et factures", "adminOperationsSection", [operations]);
 
   const account = document.createElement("section");
   account.className = "card";
   account.id = "adminAccountSection";
-  account.innerHTML = '<h2>👤 Paramètres de mon compte</h2><p class="section-note">Consulte et mets à jour les informations de ton compte administrateur.</p><a class="admin-menu-public-link" href="https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/" target="_blank" rel="noopener noreferrer">🌐 Accéder directement à mon site public ↗</a><div id="adminAccountDetails" class="section-note">Chargement...</div><form id="adminAccountForm"><label>Nouvelle adresse e-mail</label><input id="accountEmail" type="email" placeholder="nouvelle-adresse@exemple.com" autocomplete="email"><label>Nouveau numéro de téléphone (format international)</label><input id="accountPhone" type="tel" placeholder="+243..." autocomplete="tel"><label>Nouveau mot de passe</label><input id="accountPassword" type="password" minlength="8" placeholder="Au moins 8 caractères" autocomplete="new-password"><button type="submit" id="saveAccountButton">Enregistrer les modifications</button></form><div id="accountMessage" class="message"></div><p class="section-note">Pour protéger ton compte, Supabase peut demander une confirmation par e-mail ou SMS avant de valider les nouvelles coordonnées.</p>';
-  addGroup("👤 Mon compte et sécurité", "adminAccountGroup", [account, accountTop]);
+  account.innerHTML = '<h2>👤 Paramètres du compte administrateur</h2><p class="section-note">Informations, coordonnées et sécurité du compte.</p><div id="adminAccountDetails" class="section-note">Chargement...</div><form id="adminAccountForm"><label>Nouvelle adresse e-mail</label><input id="accountEmail" type="email" placeholder="nouvelle-adresse@exemple.com" autocomplete="email"><label>Nouveau numéro de téléphone (format international)</label><input id="accountPhone" type="tel" placeholder="+243..." autocomplete="tel"><label>Nouveau mot de passe</label><input id="accountPassword" type="password" minlength="8" placeholder="Au moins 8 caractères" autocomplete="new-password"><button type="submit" id="saveAccountButton">Enregistrer les modifications</button></form><div id="accountMessage" class="message"></div><p class="section-note">Une confirmation par e-mail ou SMS peut être demandée pour sécuriser les changements.</p>';
+  addGroup("👤 Compte et sécurité", "adminAccountGroup", [account, accountTop]);
+
   const trashSection = document.createElement("section");
   trashSection.id = "adminTrashSection";
   trashSection.className = "card";
-  trashSection.innerHTML = '<h2>🗑️ Corbeille</h2><p class="section-note">Les services, produits et photos supprimés restent ici. Tu peux les restaurer ou les supprimer définitivement.</p><div id="adminTrashList">Chargement...</div><button type="button" id="refreshAdminTrash">Actualiser la corbeille</button>';
+  trashSection.innerHTML = '<h2>🗑️ Corbeille</h2><p class="section-note">Éléments supprimés : restauration ou suppression définitive si disponible.</p><div id="adminTrashList">Chargement...</div><button type="button" id="refreshAdminTrash">Actualiser la corbeille</button>';
   other.appendChild(trashSection);
   document.getElementById("refreshAdminTrash")?.addEventListener("click", loadAdminTrash);
 
-  // Retirer l'ancien conteneur IA qui ne sert plus qu'à héberger les panneaux déplacés.
   if (lia) lia.remove();
 
-  // Le menu affiche une seule rubrique à la fois.
   const menu = document.getElementById("adminMenuPanel");
   const menuButton = document.getElementById("adminMenuButton");
   menuButton?.addEventListener("click", () => {
     const opened = menu.classList.toggle("open");
     menuButton.setAttribute("aria-expanded", String(opened));
   });
+  document.addEventListener("click", event => {
+    if (!menu?.contains(event.target) && !menuButton?.contains(event.target)) {
+      menu?.classList.remove("open");
+      menuButton?.setAttribute("aria-expanded", "false");
+    }
+  });
   menu?.querySelectorAll("[data-target]").forEach(button => button.addEventListener("click", () => {
     const targetId = button.dataset.target;
     menu.classList.remove("open");
+    menuButton?.setAttribute("aria-expanded", "false");
     if (targetId === "adminHome") {
       other.classList.remove("visible");
       home.style.display = "grid";
