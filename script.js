@@ -147,6 +147,36 @@ if (whatsappLink) {
   whatsappLink.rel = "noopener noreferrer";
 }
 
+
+async function chargerArticlesPublics() {
+  const liste = document.getElementById("articles-list");
+  if (!liste) return;
+  liste.replaceChildren(element("p", "Chargement des actualités..."));
+  try {
+    const response = await fetch(API_BASE + "/api/articles", {cache:"no-store"});
+    const data = await response.json();
+    if (!response.ok || data.success === false) throw new Error(data.message || "Erreur de chargement.");
+    const rows = Array.isArray(data.articles) ? data.articles : [];
+    liste.replaceChildren();
+    if (!rows.length) { liste.appendChild(element("p", "Aucune actualité publiée pour le moment.")); return; }
+    rows.forEach(article => {
+      const card = element("article", null, "service-card");
+      const photo = nettoyerUrlPhoto(article.image_url);
+      if (photo) {
+        const img = element("img", null, "service-photo");
+        img.src = photo; img.alt = article.title || "Photo de publication"; img.loading = "lazy"; img.onerror = () => img.remove();
+        card.appendChild(img);
+      }
+      card.appendChild(element("h3", article.title || "Actualité"));
+      card.appendChild(element("p", article.content || ""));
+      liste.appendChild(card);
+    });
+  } catch (error) {
+    console.error("Actualités indisponibles :", error);
+    liste.replaceChildren(element("p", "Les actualités sont momentanément indisponibles."));
+  }
+}
+
 // Les services seront chargés après les paramètres publics.
 
 // --------------------------------------------------
@@ -450,3 +480,5 @@ if (document.readyState === "loading") {
 } else {
   drbckStartAnalytics();
 }
+
+chargerArticlesPublics();
