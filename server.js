@@ -1863,6 +1863,48 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // ASSOCIER UNE PHOTO IA ENREGISTREE A UN SERVICE EXISTANT
+      const mediaAttachServiceMatch = pathname.match(new RegExp("^/api/admin/media/([0-9a-fA-F-]{36})/attach-service$"));
+      if (mediaAttachServiceMatch && req.method === "POST") {
+        const mediaId = mediaAttachServiceMatch[1];
+        const body = await readBody(req);
+        const serviceId = String(body.service_id || "").trim();
+        if (!/^\\d+$/.test(serviceId)) { sendJSON(res,400,{success:false,message:"Sélectionne un service valide."}); return; }
+        const mediaRows = await supabaseRequest("media_library?select=id,file_name,file_type,storage_path,source,status&id=eq."+encodeURIComponent(mediaId)+"&limit=1");
+        if (!Array.isArray(mediaRows) || !mediaRows.length) { sendJSON(res,404,{success:false,message:"Photo introuvable."}); return; }
+        const media = mediaRows[0];
+        if (media.source!=="ai" || media.status!=="saved" || !/^generated\\/ai-[a-f0-9-]+\\.jpg$/i.test(String(media.storage_path||"")) ||
+            !/^ai-[a-f0-9-]+\\.jpg$/i.test(String(media.file_name||"")) || media.file_type!=="image/jpeg") {
+          sendJSON(res,409,{success:false,message:"Seules les photos IA enregistrées peuvent être associées."}); return;
+        }
+        const services = await supabaseRequest("services?select=id,nom&id=eq."+encodeURIComponent(serviceId)+"&limit=1");
+        if (!Array.isArray(services) || !services.length) { sendJSON(res,404,{success:false,message:"Service introuvable."}); return; }
+        const sourcePath=String(media.storage_path);
+        const sourceResponse=await fetch(SUPABASE_URL+"/storage/v1/object/admin-media/"+sourcePath.split("/").map(encodeURIComponent).join("/"),
+          {headers:{"apikey":SUPABASE_SECRET_KEY,"Authorization":"Bearer "+SUPABASE_SECRET_KEY}});
+        if (!sourceResponse.ok) { sendJSON(res,502,{success:false,message:"Impossible de récupérer la photo privée."}); return; }
+        const fileBuffer=Buffer.from(await sourceResponse.arrayBuffer());
+        if (!fileBuffer.length || fileBuffer.length>12*1024*1024) { sendJSON(res,422,{success:false,message:"Taille de photo invalide."}); return; }
+        const publicPath="ai/"+media.file_name;
+        const uploadResponse=await fetch(SUPABASE_URL+"/storage/v1/object/services-photos/"+publicPath.split("/").map(encodeURIComponent).join("/"),{
+          method:"POST",headers:{"apikey":SUPABASE_SECRET_KEY,"Authorization":"Bearer "+SUPABASE_SECRET_KEY,"Content-Type":"image/jpeg","x-upsert":"true"},body:fileBuffer});
+        if (!uploadResponse.ok) { sendJSON(res,502,{success:false,message:"Impossible de publier la photo."}); return; }
+        const publicUrl=SUPABASE_URL+"/storage/v1/object/public/services-photos/"+publicPath.split("/").map(encodeURIComponent).join("/");
+        try {
+          await supabaseRequest("services?id=eq."+encodeURIComponent(serviceId),{method:"PATCH",body:{photo_url:publicUrl,actif:true,publication_status:"published"}});
+          await supabaseRequest("media_library?id=eq."+encodeURIComponent(mediaId),{method:"PATCH",body:{storage_path:publicPath,public_url:publicUrl,status:"published"}});
+        } catch(error) {
+          await fetch(SUPABASE_URL+"/storage/v1/object/services-photos/"+publicPath.split("/").map(encodeURIComponent).join("/"),
+            {method:"DELETE",headers:{"apikey":SUPABASE_SECRET_KEY,"Authorization":"Bearer "+SUPABASE_SECRET_KEY}}).catch(()=>{});
+          throw error;
+        }
+        await fetch(SUPABASE_URL+"/storage/v1/object/admin-media/"+sourcePath.split("/").map(encodeURIComponent).join("/"),
+          {method:"DELETE",headers:{"apikey":SUPABASE_SECRET_KEY,"Authorization":"Bearer "+SUPABASE_SECRET_KEY}}).catch(()=>{});
+        await writeAdminHistory(admin,"media.attached_to_service","service",serviceId,{media_id:mediaId,service_name:services[0].nom||null,public_url:publicUrl});
+        sendJSON(res,200,{success:true,message:"Photo associée au service « "+String(services[0].nom||"Service").slice(0,120)+" » et publiée sur le site public.",public_url:publicUrl});
+        return;
+      }
+
       const mediaPublishMatch = pathname.match(new RegExp("^/api/admin/media/([0-9a-fA-F-]{36})/publish$"));
       if (mediaPublishMatch && req.method === "POST") {
         const mediaId = mediaPublishMatch[1];
