@@ -120,8 +120,8 @@
   </div>
   <div class="admin-menu-group">
     <h4>Compte administrateur</h4>
-    <button type="button" data-target="adminAccountSection">👤 Mon compte</button>
-    <button type="button" data-target="adminAccountSection">🔐 Sécurité et coordonnées</button>
+    <button type="button" data-target="adminAccountSection">👤 Paramètres complets du compte</button>
+    <button type="button" data-target="adminAccountSection">🔐 Adresse e-mail, téléphone et mot de passe</button>
   </div>
   <button type="button" id="adminMenuLogout" class="menu-danger">🚪 Déconnexion</button>
 </nav>
@@ -2118,7 +2118,7 @@ function organizeAdminInterface() {
   const account = document.createElement("section");
   account.className = "card";
   account.id = "adminAccountSection";
-  account.innerHTML = '<h2>👤 Paramètres du compte administrateur</h2><p class="section-note">Informations, coordonnées et sécurité du compte.</p><div id="adminAccountDetails" class="section-note">Chargement...</div><form id="adminAccountForm"><label>Nouvelle adresse e-mail</label><input id="accountEmail" type="email" placeholder="nouvelle-adresse@exemple.com" autocomplete="email"><label>Nouveau numéro de téléphone (format international)</label><input id="accountPhone" type="tel" placeholder="+243..." autocomplete="tel"><label>Nouveau mot de passe</label><input id="accountPassword" type="password" minlength="8" placeholder="Au moins 8 caractères" autocomplete="new-password"><button type="submit" id="saveAccountButton">Enregistrer les modifications</button></form><div id="accountMessage" class="message"></div><p class="section-note">Une confirmation par e-mail ou SMS peut être demandée pour sécuriser les changements.</p>';
+  account.innerHTML = '<h2>👤 Paramètres du compte administrateur</h2><p class="section-note">Retrouve ici les coordonnées actuelles du compte et modifie-les quand tu le souhaites.</p><a class="admin-menu-public-link" href="https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/" target="_blank" rel="noopener noreferrer">🌐 OUVRIR DIRECTEMENT LE SITE PUBLIC ↗</a><div id="adminAccountDetails" class="section-note">Chargement des détails du compte...</div><form id="adminAccountForm"><h3>Modifier les coordonnées</h3><label>Adresse e-mail du compte</label><input id="accountEmail" type="email" placeholder="Adresse e-mail actuelle" autocomplete="email"><label>Numéro de téléphone (format international)</label><input id="accountPhone" type="tel" placeholder="+243..." autocomplete="tel"><h3>Modifier le mot de passe</h3><p class="section-note">Le mot de passe actuel ne peut pas être affiché pour des raisons de sécurité. Tu peux définir un nouveau mot de passe ci-dessous.</p><label>Nouveau mot de passe</label><input id="accountPassword" type="password" minlength="8" placeholder="Saisir un nouveau mot de passe (8 caractères minimum)" autocomplete="new-password"><button type="submit" id="saveAccountButton">💾 Enregistrer les modifications</button></form><div id="accountMessage" class="message"></div><p class="section-note">Les changements d’e-mail ou de téléphone peuvent nécessiter une confirmation par e-mail ou SMS.</p>';
   addGroup("👤 Compte et sécurité", "adminAccountGroup", [account, accountTop]);
 
   const trashSection = document.createElement("section");
@@ -2165,11 +2165,16 @@ function organizeAdminInterface() {
     try {
       const data = await apiRequest("/api/admin/account");
       const a = data.account || {};
+      const emailInput = document.getElementById("accountEmail");
+      const phoneInput = document.getElementById("accountPhone");
+      if (emailInput && !emailInput.value) emailInput.value = a.email || "";
+      if (phoneInput && !phoneInput.value) phoneInput.value = a.phone || "";
       box.innerHTML = '<div class="stat"><span>Nom du compte</span><strong style="font-size:16px">' +
-        escapeAdminText(a.full_name || "Administrateur") + '</strong></div><div class="stat"><span>E-mail actuel</span><strong style="font-size:16px">' +
-        escapeAdminText(a.email || "Non renseigné") + '</strong><span>' + (a.email_confirmed ? "Confirmé" : "À confirmer") +
-        '</span></div><div class="stat"><span>Téléphone actuel</span><strong style="font-size:16px">' +
-        escapeAdminText(a.phone || "Non renseigné") + '</strong><span>' + (a.phone_confirmed ? "Confirmé" : "À confirmer") + '</span></div>';
+        escapeAdminText(a.full_name || "Administrateur") + '</strong></div><div class="stat"><span>Adresse e-mail actuelle</span><strong style="font-size:16px">' +
+        escapeAdminText(a.email || "Non renseignée") + '</strong><span>' + (a.email_confirmed ? "E-mail confirmé" : "E-mail à confirmer") +
+        '</span></div><div class="stat"><span>Numéro de téléphone actuel</span><strong style="font-size:16px">' +
+        escapeAdminText(a.phone || "Non renseigné") + '</strong><span>' + (a.phone_confirmed ? "Téléphone confirmé" : "Téléphone à confirmer") +
+        '</span></div><div class="stat"><span>Mot de passe</span><strong style="font-size:16px">••••••••</strong><span>Protégé — jamais affiché</span></div>';
     } catch (error) { box.textContent = error.message; }
   }
   function escapeAdminText(value) {
