@@ -109,6 +109,7 @@
   <div class="admin-menu-group">
     <h4>2 — Intelligence artificielle</h4>
     <button type="button" data-target="adminProductGenerator">🛍️ Générateur automatique de produits</button>
+    <button type="button" data-target="adminArticlesSection">📰 Articles & actualités du business</button>
     <button type="button" data-target="adminServiceGenerator">🧰 Générateur automatique de services</button>
     <button type="button" data-target="adminAISection">📸 Générateur d’images</button>
     <button type="button" data-target="adminAISection">📝 Générateur de descriptions</button>
@@ -316,6 +317,7 @@
       <div id="productsList">Chargement des produits...</div>
     </div>
 
+    <section class="card" id="adminArticlesSection"><h2>📰 Articles & actualités du business</h2><p class="section-note">Nouveautés, annonces, conseils et réalisations de DRBCK TECH.IT.PRO avec photos.</p><div id="articleMessage" class="message"></div><form id="articleForm"><input type="hidden" id="articleId"><label>Titre de la publication</label><input id="articleTitle" maxlength="180" required><label>Texte de la publication</label><textarea id="articleContent" maxlength="10000" required></textarea><label>Photo de la publication (URL)</label><input id="articleImage" type="url" placeholder="https://..."><label>État</label><select id="articleStatus"><option value="draft">Brouillon</option><option value="published">Publié sur le site public</option></select><button type="submit" id="saveArticleButton">Enregistrer la publication</button></form><div class="topline"><h3>Publications enregistrées</h3><button type="button" onclick="loadArticles()">Actualiser</button></div><div id="articlesList">Chargement...</div></section>
     <div class="card">
       <h2>Gestion de la boutique et des opérations</h2>
       <p class="section-note">Ces rubriques affichent les données réellement enregistrées. Les actions de modification seront activées avec leurs contrôles de sécurité et de validation.</p>
@@ -2095,6 +2097,7 @@ function organizeAdminInterface() {
   const serviceEditor = document.getElementById("serviceForm")?.closest(".card");
   const serviceList = document.getElementById("servicesList")?.closest(".card");
   const productEditor = document.getElementById("productForm")?.closest(".card");
+  const articlesEditor = document.getElementById("adminArticlesSection");
   const overview = document.getElementById("overviewStats")?.closest(".card");
   const operations = document.getElementById("moduleData")?.closest(".card");
   const accountTop = [...dashboard.querySelectorAll(".card")].find(el => el.querySelector("#adminInfo"));
@@ -2103,6 +2106,7 @@ function organizeAdminInterface() {
   if (serviceEditor) home.appendChild(serviceEditor);
   if (serviceList) home.appendChild(serviceList);
   if (productEditor) home.appendChild(productEditor);
+  if (articlesEditor) home.appendChild(articlesEditor);
 
   const productList = document.createElement("section");
   productList.className = "card";
