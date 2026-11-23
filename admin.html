@@ -1924,8 +1924,10 @@ async function generateMissingServicePhotos() {
       }
       created++;
       remaining = result.remaining;
-      list.insertAdjacentHTML("afterbegin",
-        '<p class="message success">' + escapeHtml(result.message || "Photo publiée.") + '</p>');
+      const notice = document.createElement("p");
+      notice.className = "message success";
+      notice.textContent = result.message || "Photo publiée.";
+      list.prepend(notice);
       if (remaining === 0) break;
     }
     const suffix = remaining === 0 ? " Tous les services ont maintenant une photo." :
