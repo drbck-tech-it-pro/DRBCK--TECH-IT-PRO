@@ -723,7 +723,7 @@ document.getElementById("productForm").addEventListener("submit", async event =>
 });
 
 async function deleteProduct(id) {
-  if (!id || !confirm("Supprimer définitivement ce produit ?")) return;
+  if (!id || !confirm("Déplacer ce produit dans la corbeille ?")) return;
   const removeButtons = document.querySelectorAll("#productsList button");
   removeButtons.forEach(button => { button.disabled = true; });
   try {
@@ -737,7 +737,7 @@ async function deleteProduct(id) {
     // Recharger la liste et les indicateurs après la suppression.
     await loadProducts();
     await loadOverview();
-    showMessage("productMessage", "Produit supprimé et liste actualisée.", "success");
+    showMessage("productMessage", "Produit déplacé dans la corbeille.", "success");
   } catch (error) {
     showMessage("productMessage", error.message);
     await loadProducts().catch(() => {});
@@ -1883,14 +1883,14 @@ function resetServiceForm() {
 // SUPPRIMER UN SERVICE
 
 async function deleteService(id) {
-  if (!confirm("Voulez-vous vraiment supprimer ce service ?")) return;
+  if (!confirm("Déplacer ce service dans la corbeille ?")) return;
 
   try {
     await apiRequest("/api/admin/services/" + encodeURIComponent(id), {
       method: "DELETE"
     });
 
-    showMessage("serviceMessage", "Service supprimé.", "success");
+    showMessage("serviceMessage", "Service déplacé dans la corbeille.", "success");
     await loadServices();
 
   } catch (error) {
