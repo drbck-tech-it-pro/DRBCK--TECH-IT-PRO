@@ -2078,6 +2078,65 @@ async function deleteService(id) {
 }
 
 
+
+function resetArticleForm() {
+  document.getElementById("articleForm").reset();
+  document.getElementById("articleId").value = "";
+  document.getElementById("saveArticleButton").textContent = "Enregistrer la publication";
+}
+async function loadArticles() {
+  const box = document.getElementById("articlesList");
+  if (!box) return;
+  box.textContent = "Chargement...";
+  try {
+    const data = await apiRequest("/api/admin/articles");
+    const rows = data.articles || [];
+    box.replaceChildren();
+    if (!rows.length) { box.textContent = "Aucune publication enregistrée."; return; }
+    rows.forEach(article => {
+      const card = document.createElement("div"); card.className = "service";
+      if (article.image_url) { const img = document.createElement("img"); img.src = article.image_url; img.alt = article.title || "Photo"; img.style.maxWidth = "100%"; img.style.maxHeight = "180px"; card.appendChild(img); }
+      const title = document.createElement("h3"); title.textContent = article.title || "";
+      const content = document.createElement("p"); content.textContent = article.content || "";
+      const state = document.createElement("small"); state.textContent = article.publication_status === "published" ? "Publié" : "Brouillon";
+      const actions = document.createElement("div"); actions.className = "actions";
+      const edit = document.createElement("button"); edit.type = "button"; edit.textContent = "Modifier";
+      edit.onclick = () => {
+        document.getElementById("articleId").value = article.id;
+        document.getElementById("articleTitle").value = article.title || "";
+        document.getElementById("articleContent").value = article.content || "";
+        document.getElementById("articleImage").value = article.image_url || "";
+        document.getElementById("articleStatus").value = article.publication_status || "draft";
+        document.getElementById("saveArticleButton").textContent = "Enregistrer les modifications";
+        document.getElementById("articleForm").scrollIntoView({behavior:"smooth"});
+      };
+      const del = document.createElement("button"); del.type = "button"; del.className = "danger"; del.textContent = "Supprimer";
+      del.onclick = async () => {
+        if (!confirm("Supprimer cette publication ?")) return;
+        try { await apiRequest("/api/admin/articles/" + encodeURIComponent(article.id), {method:"DELETE"}); await loadArticles(); }
+        catch (error) { showMessage("articleMessage", error.message); }
+      };
+      actions.append(edit, del); card.append(title, content, state, actions); box.appendChild(card);
+    });
+  } catch (error) { box.textContent = "Impossible de charger les publications."; showMessage("articleMessage", error.message); }
+}
+document.getElementById("articleForm")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const id = document.getElementById("articleId").value;
+  const button = document.getElementById("saveArticleButton"); button.disabled = true;
+  const body = {
+    title: document.getElementById("articleTitle").value.trim(),
+    content: document.getElementById("articleContent").value.trim(),
+    image_url: document.getElementById("articleImage").value.trim(),
+    publication_status: document.getElementById("articleStatus").value
+  };
+  try {
+    await apiRequest(id ? "/api/admin/articles/" + encodeURIComponent(id) : "/api/admin/articles", {method:id?"PATCH":"POST",body:JSON.stringify(body)});
+    resetArticleForm(); await loadArticles(); showMessage("articleMessage", "Publication enregistrée.", "success");
+  } catch (error) { showMessage("articleMessage", error.message); }
+  finally { button.disabled = false; }
+});
+
 /* ORGANISATION DE L'INTERFACE ADMIN — accueil épuré et menu ☰ */
 let adminInterfaceOrganized = false;
 function organizeAdminInterface() {
@@ -2168,13 +2227,14 @@ function organizeAdminInterface() {
     const targetId = button.dataset.target;
     menu.classList.remove("open");
     menuButton?.setAttribute("aria-expanded", "false");
-    if (targetId === "adminProductGenerator" || targetId === "adminServiceGenerator") {
+    if (targetId === "adminProductGenerator" || targetId === "adminServiceGenerator" || targetId === "adminArticlesSection") {
       other.classList.remove("visible");
       home.style.display = "grid";
       const target = document.getElementById(targetId);
       target?.scrollIntoView({behavior:"smooth",block:"start"});
       if (targetId === "adminProductGenerator") document.getElementById("productName")?.focus({preventScroll:true});
-      else document.getElementById("serviceName")?.focus({preventScroll:true});
+      else if (targetId === "adminServiceGenerator") document.getElementById("serviceName")?.focus({preventScroll:true});
+      if (targetId === "adminArticlesSection") loadArticles();
       return;
     }
     if (targetId === "adminHome") {
@@ -2223,6 +2283,7 @@ function organizeAdminInterface() {
     return String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   }
   loadAccountSettings();
+  loadArticles();
   document.getElementById("adminAccountForm")?.addEventListener("submit", async event => {
     event.preventDefault();
     const button = document.getElementById("saveAccountButton");
