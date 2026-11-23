@@ -1174,6 +1174,41 @@ function renderMediaModule(rows, target) {
           }
         });
         item.appendChild(attachButton);
+        const serviceAttachButton = document.createElement("button");
+        serviceAttachButton.type = "button";
+        serviceAttachButton.className = "secondary";
+        serviceAttachButton.textContent = "🛠️ Associer à un service existant";
+        serviceAttachButton.addEventListener("click", async () => {
+          serviceAttachButton.disabled = true;
+          serviceAttachButton.textContent = "Chargement des services...";
+          try {
+            const serviceData = await apiRequest("/api/admin/services");
+            const services = Array.isArray(serviceData.services) ? serviceData.services : [];
+            if (!services.length) throw new Error("Aucun service enregistré.");
+            const chooser = document.createElement("select");
+            chooser.setAttribute("aria-label", "Choisir le service auquel associer cette photo");
+            const first = document.createElement("option");
+            first.value = ""; first.textContent = "Choisir le service...";
+            chooser.appendChild(first);
+            services.forEach(service => { const option=document.createElement("option"); option.value=service.id; option.textContent=service.nom||"Service sans nom"; chooser.appendChild(option); });
+            const apply=document.createElement("button"); apply.type="button"; apply.textContent="Confirmer l'association";
+            const cancel=document.createElement("button"); cancel.type="button"; cancel.className="secondary"; cancel.textContent="Annuler";
+            const chooserBox=document.createElement("div"); chooserBox.className="media-attach-product"; chooserBox.append(chooser,apply,cancel);
+            item.appendChild(chooserBox); serviceAttachButton.hidden=true;
+            cancel.addEventListener("click",()=>{chooserBox.remove();serviceAttachButton.hidden=false;serviceAttachButton.disabled=false;serviceAttachButton.textContent="🛠️ Associer à un service existant";});
+            apply.addEventListener("click",async()=>{
+              if(!chooser.value){showMessage("moduleMessage","Choisis d'abord un service.");return;}
+              if(!confirm("Publier cette photo sur le service sélectionné du site public ?"))return;
+              apply.disabled=true;
+              try{
+                const result=await apiRequest("/api/admin/media/"+encodeURIComponent(row.id)+"/attach-service",{method:"POST",body:JSON.stringify({service_id:chooser.value})});
+                showMessage("moduleMessage",result.message||"Photo associée au service.","success");
+                await Promise.all([loadAdminModule("media"),loadServices()]);
+              }catch(error){showMessage("moduleMessage",error.message||"Association impossible.");apply.disabled=false;}
+            });
+          }catch(error){showMessage("moduleMessage",error.message||"Impossible de charger les services.");serviceAttachButton.disabled=false;serviceAttachButton.textContent="🛠️ Réessayer l'association";}
+        });
+        item.appendChild(serviceAttachButton);
       }
     if (row.source === "ai" && (row.status === "draft" || row.status === "saved")) {
       if (row.status === "draft") {
