@@ -2064,24 +2064,25 @@ function organizeAdminInterface() {
   const operations = document.getElementById("moduleData")?.closest(".card");
   const accountTop = [...dashboard.querySelectorAll(".card")].find(el => el.querySelector("#adminInfo"));
 
-  // Accueil : uniquement les listes de services/produits et une conversation IA.
+  // Accueil : uniquement la gestion des services et un seul assistant IA.
   if (serviceList) home.appendChild(serviceList);
-  const productList = document.createElement("section");
-  productList.className = "card";
-  productList.id = "adminProductListCard";
-  productList.innerHTML = '<div class="topline"><h2>🛍️ Produits</h2><button type="button" onclick="loadProducts()">Actualiser</button></div>';
-  const productsList = document.getElementById("productsList");
-  const productListHeader = productsList?.previousElementSibling;
-  if (productsList) productList.appendChild(productsList);
-  if (productListHeader && productListHeader.classList.contains("topline")) productListHeader.remove();
-  home.appendChild(productList);
 
   const chatCard = document.createElement("section");
   chatCard.className = "card";
   chatCard.id = "adminHomeChat";
-  chatCard.innerHTML = '<h2>💬 Mon intelligence artificielle</h2><p class="section-note">Discute, pose tes questions et échange tes idées avec ton assistant DRBCK TECH.</p>';
+  chatCard.innerHTML = '<h2>🤖 DRBCK TECH IA</h2><p class="section-note">Ton assistant intelligent réservé à l’administration.</p>';
   if (assistant) { assistant.classList.remove("hidden"); chatCard.appendChild(assistant); }
   home.appendChild(chatCard);
+
+  // La liste des produits reste dans sa rubrique dédiée, jamais sur l’accueil.
+  const productList = document.createElement("section");
+  productList.className = "card";
+  productList.id = "adminProductListCard";
+  productList.innerHTML = '<div class="topline"><h2>🛍️ Produits enregistrés</h2><button type="button" onclick="loadProducts()">Actualiser</button></div>';
+  const productsList = document.getElementById("productsList");
+  const productListHeader = productsList?.previousElementSibling;
+  if (productsList) productList.appendChild(productsList);
+  if (productListHeader && productListHeader.classList.contains("topline")) productListHeader.remove();
 
   // Rubriques rangées dans le menu.
   function addGroup(title, id, nodes) {
@@ -2092,7 +2093,7 @@ function organizeAdminInterface() {
     other.appendChild(group);
   }
   addGroup("🛠️ Gestion et création des services", "adminServicesEditor", [serviceEditor]);
-  addGroup("🛍️ Gestion et création des produits", "adminProductsEditor", [productEditor]);
+  addGroup("🛍️ Gestion et création des produits", "adminProductsEditor", [productEditor, productList]);
   addGroup("🤖 Intelligence artificielle et médias", "adminAISection", [creator ? creator.closest("#liaCreatorPanel") : null]);
   if (overview) addGroup("📊 Statistiques", "adminOverviewSection", [overview]);
   if (operations) addGroup("📦 Outils et opérations", "adminOperationsSection", [operations]);
