@@ -1107,6 +1107,74 @@ function renderMediaModule(rows, target) {
     label.textContent = (row.file_name || "Fichier") + " · " + (row.file_type || "") +
       " · " + (row.status || "draft") + " · " + (row.source || "upload");
     item.append(image, label);
+      if (row.status === "saved") {
+        const attachButton = document.createElement("button");
+        attachButton.type = "button";
+        attachButton.className = "secondary";
+        attachButton.textContent = "🛍️ Associer à un produit existant";
+        attachButton.addEventListener("click", async () => {
+          attachButton.disabled = true;
+          attachButton.textContent = "Chargement des produits...";
+          try {
+            const productData = await apiRequest("/api/admin/products");
+            const products = Array.isArray(productData.products) ? productData.products : [];
+            if (!products.length) throw new Error("Aucun produit enregistré. Crée d'abord un produit.");
+            const chooser = document.createElement("select");
+            chooser.setAttribute("aria-label", "Choisir le produit auquel associer cette photo");
+            const first = document.createElement("option");
+            first.value = "";
+            first.textContent = "Choisir le produit...";
+            chooser.appendChild(first);
+            products.forEach(product => {
+              const option = document.createElement("option");
+              option.value = product.id;
+              option.textContent = product.name || "Produit sans nom";
+              chooser.appendChild(option);
+            });
+            const apply = document.createElement("button");
+            apply.type = "button";
+            apply.textContent = "Confirmer l'association";
+            const cancel = document.createElement("button");
+            cancel.type = "button";
+            cancel.className = "secondary";
+            cancel.textContent = "Annuler";
+            const chooserBox = document.createElement("div");
+            chooserBox.className = "media-attach-product";
+            chooserBox.append(chooser, apply, cancel);
+            item.appendChild(chooserBox);
+            attachButton.hidden = true;
+            cancel.addEventListener("click", () => {
+              chooserBox.remove();
+              attachButton.hidden = false;
+              attachButton.disabled = false;
+              attachButton.textContent = "🛍️ Associer à un produit existant";
+            });
+            apply.addEventListener("click", async () => {
+              if (!chooser.value) {
+                showMessage("moduleMessage", "Choisis d'abord un produit.");
+                return;
+              }
+              if (!confirm("Associer cette photo IA au produit sélectionné et l'afficher sur le site public ?")) return;
+              apply.disabled = true;
+              try {
+                const result = await apiRequest("/api/admin/media/" + encodeURIComponent(row.id) + "/attach-product", {
+                  method: "POST", body: JSON.stringify({ product_id: chooser.value })
+                });
+                showMessage("moduleMessage", result.message || "Photo associée au produit.", "success");
+                await Promise.all([loadAdminModule("media"), loadProducts()]);
+              } catch (error) {
+                showMessage("moduleMessage", error.message || "Association impossible.");
+                apply.disabled = false;
+              }
+            });
+          } catch (error) {
+            showMessage("moduleMessage", error.message || "Impossible de charger les produits.");
+            attachButton.disabled = false;
+            attachButton.textContent = "🛍️ Réessayer l'association";
+          }
+        });
+        item.appendChild(attachButton);
+      }
     if (row.source === "ai" && (row.status === "draft" || row.status === "saved")) {
       if (row.status === "draft") {
         const saveToGallery = document.createElement("button");
