@@ -1786,6 +1786,83 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // ASSOCIER UNE PHOTO IA DEJA GENEREE A UN PRODUIT EXISTANT
+      const mediaAttachProductMatch = pathname.match(new RegExp("^/api/admin/media/([0-9a-fA-F-]{36})/attach-product$"));
+      if (mediaAttachProductMatch && req.method === "POST") {
+        const mediaId = mediaAttachProductMatch[1];
+        const body = await readBody(req);
+        const productId = String(body.product_id || "").trim();
+        if (!/^[0-9a-fA-F-]{36}$/.test(productId)) {
+          sendJSON(res, 400, { success: false, message: "Sélectionne un produit valide." }); return;
+        }
+        const mediaRows = await supabaseRequest("media_library?select=id,file_name,file_type,storage_path,source,status&id=eq." +
+          encodeURIComponent(mediaId) + "&limit=1");
+        if (!Array.isArray(mediaRows) || !mediaRows.length) {
+          sendJSON(res, 404, { success: false, message: "Photo introuvable dans la galerie." }); return;
+        }
+        const media = mediaRows[0];
+        if (media.source !== "ai" || media.status !== "saved" ||
+            !/^generated\/ai-[a-f0-9-]+\.jpg$/i.test(String(media.storage_path || "")) ||
+            !/^ai-[a-f0-9-]+\.jpg$/i.test(String(media.file_name || "")) || media.file_type !== "image/jpeg") {
+          sendJSON(res, 409, { success: false, message: "Seules les photos IA enregistrées dans la galerie peuvent être associées." }); return;
+        }
+        const products = await supabaseRequest("products?select=id,name,image_url&id=eq." +
+          encodeURIComponent(productId) + "&limit=1");
+        if (!Array.isArray(products) || !products.length) {
+          sendJSON(res, 404, { success: false, message: "Produit introuvable." }); return;
+        }
+        const sourcePath = String(media.storage_path);
+        const sourceResponse = await fetch(SUPABASE_URL + "/storage/v1/object/admin-media/" +
+          sourcePath.split("/").map(encodeURIComponent).join("/"), {
+            headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
+          });
+        if (!sourceResponse.ok) {
+          sendJSON(res, 502, { success: false, message: "Impossible de récupérer la photo privée dans Supabase." }); return;
+        }
+        const fileBuffer = Buffer.from(await sourceResponse.arrayBuffer());
+        if (!fileBuffer.length || fileBuffer.length > 12 * 1024 * 1024) {
+          sendJSON(res, 422, { success: false, message: "La photo a une taille invalide." }); return;
+        }
+        const publicPath = "ai/" + media.file_name;
+        const uploadResponse = await fetch(SUPABASE_URL + "/storage/v1/object/services-photos/" +
+          publicPath.split("/").map(encodeURIComponent).join("/"), {
+            method: "POST",
+            headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY,
+              "Content-Type": "image/jpeg", "x-upsert": "true" },
+            body: fileBuffer
+          });
+        if (!uploadResponse.ok) {
+          console.error("Association photo produit impossible :", uploadResponse.status, await uploadResponse.text());
+          sendJSON(res, 502, { success: false, message: "Impossible de copier la photo dans la galerie publique." }); return;
+        }
+        const publicUrl = SUPABASE_URL + "/storage/v1/object/public/services-photos/" +
+          publicPath.split("/").map(encodeURIComponent).join("/");
+        try {
+          await supabaseRequest("products?id=eq." + encodeURIComponent(productId), {
+            method: "PATCH", body: { image_url: publicUrl }
+          });
+          await supabaseRequest("media_library?id=eq." + encodeURIComponent(mediaId), {
+            method: "PATCH", body: { storage_path: publicPath, public_url: publicUrl, status: "published" }
+          });
+        } catch (error) {
+          await fetch(SUPABASE_URL + "/storage/v1/object/services-photos/" +
+            publicPath.split("/").map(encodeURIComponent).join("/"), {
+              method: "DELETE", headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
+            }).catch(() => {});
+          throw error;
+        }
+        await fetch(SUPABASE_URL + "/storage/v1/object/admin-media/" +
+          sourcePath.split("/").map(encodeURIComponent).join("/"), {
+            method: "DELETE", headers: { "apikey": SUPABASE_SECRET_KEY, "Authorization": "Bearer " + SUPABASE_SECRET_KEY }
+          }).catch(() => {});
+        await writeAdminHistory(admin, "media.attached_to_product", "product", productId, {
+          media_id: mediaId, product_name: products[0].name || null, public_url: publicUrl
+        });
+        sendJSON(res, 200, { success: true, message: "Photo IA associée au produit « " +
+          String(products[0].name || "Produit").slice(0, 120) + " » et publiée sur le site public.", public_url: publicUrl });
+        return;
+      }
+
       const mediaPublishMatch = pathname.match(new RegExp("^/api/admin/media/([0-9a-fA-F-]{36})/publish$"));
       if (mediaPublishMatch && req.method === "POST") {
         const mediaId = mediaPublishMatch[1];
