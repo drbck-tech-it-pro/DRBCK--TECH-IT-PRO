@@ -837,6 +837,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+
+    if (req.method === "GET" && pathname === "/api/articles") {
+      const articles = await supabaseRequest("business_articles?select=id,title,content,image_url,created_at&publication_status=eq.published&order=created_at.desc&limit=100");
+      sendJSON(res,200,{success:true,articles:Array.isArray(articles)?articles:[]});
+      return;
+    }
+
     // ----------------------------------------------
     // SERVICES PUBLICS
     // ----------------------------------------------
@@ -1575,6 +1582,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const readOnlyModules = {
+        "/api/admin/articles": { table:"business_articles", select:"id,title,content,image_url,publication_status,created_at,updated_at", order:"created_at.desc", key:"articles" },
         "/api/admin/products": {
           table: "products",
           select: "id,name,description,price,currency,product_type,image_url,stock,active,publication_status,created_at,updated_at",
@@ -2317,6 +2325,46 @@ const server = http.createServer(async (req, res) => {
         await writeAdminHistory(admin, "shipment.updated", "shipment", shipmentId, { fields: Object.keys(updates) });
         sendJSON(res, 200, { success: true, message: "Livraison modifiée.", shipment: updated });
         return;
+      }
+
+
+      if (req.method === "POST" && pathname === "/api/admin/articles") {
+        const body = await readBody(req);
+        const title = String(body.title || "").trim();
+        const content = String(body.content || "").trim();
+        const status = body.publication_status || "draft";
+        if (!title || !content || !["draft","published"].includes(status)) {
+          sendJSON(res,400,{success:false,message:"Titre, texte et statut valides obligatoires."}); return;
+        }
+        const created = await supabaseRequest("business_articles",{method:"POST",body:{
+          title,content,image_url:String(body.image_url || "").trim() || null,publication_status:status
+        }});
+        const article = Array.isArray(created) ? created[0] : created;
+        await writeAdminHistory(admin,"article.created","article",article && article.id,{title});
+        sendJSON(res,201,{success:true,message:"Publication enregistrée.",article}); return;
+      }
+      const articleMatch = pathname.match(/^\/api\/admin\/articles\/([0-9a-fA-F-]{36})$/);
+      if (articleMatch && req.method === "PATCH") {
+        const body = await readBody(req);
+        const updates = {};
+        for (const key of ["title","content","image_url","publication_status"]) {
+          if (Object.prototype.hasOwnProperty.call(body,key)) updates[key] = body[key];
+        }
+        if (updates.title !== undefined) updates.title = String(updates.title || "").trim();
+        if (updates.content !== undefined) updates.content = String(updates.content || "").trim();
+        if (updates.image_url !== undefined) updates.image_url = String(updates.image_url || "").trim() || null;
+        if (updates.publication_status !== undefined && !["draft","published"].includes(updates.publication_status)) {
+          sendJSON(res,400,{success:false,message:"Statut invalide."}); return;
+        }
+        updates.updated_at = new Date().toISOString();
+        const updated = await supabaseRequest("business_articles?id=eq."+encodeURIComponent(articleMatch[1]),{method:"PATCH",body:updates});
+        await writeAdminHistory(admin,"article.updated","article",articleMatch[1],{fields:Object.keys(updates)});
+        sendJSON(res,200,{success:true,message:"Publication modifiée.",article:updated}); return;
+      }
+      if (articleMatch && req.method === "DELETE") {
+        await supabaseRequest("business_articles?id=eq."+encodeURIComponent(articleMatch[1]),{method:"DELETE"});
+        await writeAdminHistory(admin,"article.deleted","article",articleMatch[1],{});
+        sendJSON(res,200,{success:true,message:"Publication supprimée."}); return;
       }
 
       // --------------------------------------------
