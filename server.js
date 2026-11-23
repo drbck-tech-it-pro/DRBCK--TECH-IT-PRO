@@ -1873,8 +1873,8 @@ const server = http.createServer(async (req, res) => {
         const mediaRows = await supabaseRequest("media_library?select=id,file_name,file_type,storage_path,source,status&id=eq."+encodeURIComponent(mediaId)+"&limit=1");
         if (!Array.isArray(mediaRows) || !mediaRows.length) { sendJSON(res,404,{success:false,message:"Photo introuvable."}); return; }
         const media = mediaRows[0];
-        if (media.source!=="ai" || media.status!=="saved" || !/^generated\\/ai-[a-f0-9-]+\\.jpg$/i.test(String(media.storage_path||"")) ||
-            !/^ai-[a-f0-9-]+\\.jpg$/i.test(String(media.file_name||"")) || media.file_type!=="image/jpeg") {
+        if (media.source!=="ai" || media.status!=="saved" || !/^generated\/ai-[a-f0-9-]+\.jpg$/i.test(String(media.storage_path||"")) ||
+            !/^ai-[a-f0-9-]+\.jpg$/i.test(String(media.file_name||"")) || media.file_type!=="image/jpeg") {
           sendJSON(res,409,{success:false,message:"Seules les photos IA enregistrées peuvent être associées."}); return;
         }
         const services = await supabaseRequest("services?select=id,nom&id=eq."+encodeURIComponent(serviceId)+"&limit=1");
