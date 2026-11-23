@@ -108,6 +108,8 @@
   </div>
   <div class="admin-menu-group">
     <h4>2 — Intelligence artificielle</h4>
+    <button type="button" data-target="adminProductGenerator">🛍️ Générateur automatique de produits</button>
+    <button type="button" data-target="adminServiceGenerator">🧰 Générateur automatique de services</button>
     <button type="button" data-target="adminAISection">📸 Générateur d’images</button>
     <button type="button" data-target="adminAISection">📝 Générateur de descriptions</button>
     <button type="button" data-target="adminAISection">🎬 Générateur de vidéos</button>
@@ -275,12 +277,12 @@
       <form id="productForm">
         <input type="hidden" id="productId">
         <label>Nom du produit</label>
-        <input id="productName" required>
+        <input id="productName" placeholder="Ex. : Disque dur externe 1 To" required>
         <label>Prix du produit en dollars (USD)</label>
-        <input id="productPrice" type="number" min="0" step="0.01" required>
+        <input id="productPrice" type="number" min="0" step="0.01" placeholder="Ex. : 45" required>
         <div class="lia-admin-panel" style="margin:14px 0;padding:16px;border:2px solid #3978b8">
-          <h3>🤖 GÉNÉRATEUR IA — PRODUITS</h3>
-          <p class="section-note">1. Écris le nom et le prix ci-dessus. 2. Clique pour créer automatiquement la description et l’image. 3. Vérifie le résultat dans la médiathèque avant publication. Tu peux aussi choisir ta propre photo.</p>
+          <h3>🤖 GÉNÉRATEUR AUTOMATIQUE DE PRODUITS</h3>
+          <p class="section-note">Saisis uniquement le nom et le prix du produit, puis clique sur Générer. L’IA rédige la description et crée une photo. Après vérification, clique sur Créer le produit pour enregistrer le produit avec sa photo.</p>
           <button type="button" id="generateFullProduct">✨ Générer la description + la photo du produit</button>
           <div id="productAiStatus" class="section-note" aria-live="polite"></div>
           <img id="productAiPreview" class="lia-admin-preview hidden" alt="Aperçu de la photo du produit générée">
@@ -735,10 +737,17 @@ document.getElementById("productForm").addEventListener("submit", async event =>
   const button = document.getElementById("saveProductButton");
   button.disabled = true;
   try {
-    await apiRequest(id ? "/api/admin/products/" + encodeURIComponent(id) : "/api/admin/products", {
+    const savedProduct = await apiRequest(id ? "/api/admin/products/" + encodeURIComponent(id) : "/api/admin/products", {
       method: id ? "PATCH" : "POST",
       body: JSON.stringify(body)
     });
+    const savedProductId = id || (savedProduct.product && savedProduct.product.id) || savedProduct.id;
+    if (generatedProductMediaId && savedProductId) {
+      await apiRequest("/api/admin/media/" + encodeURIComponent(generatedProductMediaId) + "/attach-product", {
+        method: "POST", body: JSON.stringify({ product_id: savedProductId })
+      });
+      generatedProductMediaId = "";
+    }
     showMessage("productMessage", id ? "Produit modifié." : "Produit créé.", "success");
     resetProductForm();
     await loadProducts();
@@ -2155,6 +2164,15 @@ function organizeAdminInterface() {
     const targetId = button.dataset.target;
     menu.classList.remove("open");
     menuButton?.setAttribute("aria-expanded", "false");
+    if (targetId === "adminProductGenerator" || targetId === "adminServiceGenerator") {
+      other.classList.remove("visible");
+      home.style.display = "grid";
+      const target = document.getElementById(targetId);
+      target?.scrollIntoView({behavior:"smooth",block:"start"});
+      if (targetId === "adminProductGenerator") document.getElementById("productName")?.focus({preventScroll:true});
+      else document.getElementById("serviceName")?.focus({preventScroll:true});
+      return;
+    }
     if (targetId === "adminHome") {
       other.classList.remove("visible");
       home.style.display = "grid";
