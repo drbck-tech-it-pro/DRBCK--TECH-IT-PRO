@@ -1,4 +1,5 @@
-const CACHE_NAME = "drbck-public-v1";
+const CACHE_NAME = "drbck-public-v2";
+const IMAGE_CACHE = "drbck-public-images-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,19 +8,47 @@ const APP_SHELL = [
   "./logo.jpg",
   "./manifest.webmanifest"
 ];
+
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
   self.skipWaiting();
 });
+
 self.addEventListener("activate", event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))));
+  event.waitUntil(caches.keys().then(keys => Promise.all(
+    keys.filter(key => key.startsWith("drbck-public-") &&
+      key !== CACHE_NAME && key !== IMAGE_CACHE).map(key => caches.delete(key))
+  )));
   self.clients.claim();
 });
+
 self.addEventListener("fetch", event => {
   const request = event.request;
   const url = new URL(request.url);
-  if (request.method !== "GET" || url.origin !== self.location.origin) return;
-  if (url.pathname.includes("/api/")) return;
+  if (request.method !== "GET") return;
+
+  // Cache les photos distantes (notamment Supabase) pour les visites suivantes.
+  if (request.destination === "image" && url.protocol.startsWith("http")) {
+    event.respondWith((async () => {
+      const cache = await caches.open(IMAGE_CACHE);
+      const cached = await cache.match(request);
+      const refresh = fetch(request).then(response => {
+        if (response && (response.ok || response.type === "opaque")) {
+          cache.put(request, response.clone()).catch(() => {});
+        }
+        return response;
+      });
+      if (cached) {
+        event.waitUntil(refresh.catch(() => {}));
+        return cached;
+      }
+      try { return await refresh; }
+      catch (error) { throw error; }
+    })());
+    return;
+  }
+
+  if (url.origin !== self.location.origin || url.pathname.includes("/api/")) return;
   event.respondWith(
     fetch(request).then(response => {
       if (response && response.ok) {
