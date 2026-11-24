@@ -1,0 +1,20 @@
+{
+  "name": "DRBCK TECH.IT.PRO",
+  "short_name": "DRBCK TECH",
+  "description": "Services informatiques, boutique et assistance à Likasi.",
+  "lang": "fr",
+  "start_url": "/DRBCK--TECH-IT-PRO/",
+  "scope": "/DRBCK--TECH-IT-PRO/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#10264a",
+  "icons": [
+    {
+      "src": "logo.jpg",
+      "sizes": "any",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}
