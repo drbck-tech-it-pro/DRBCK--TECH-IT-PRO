@@ -1,4 +1,5 @@
 name: Build DRBCK Admin APK
+# Rebuilds the admin APK whenever the Android admin app or its launcher branding changes.
 
 on:
   workflow_dispatch:
