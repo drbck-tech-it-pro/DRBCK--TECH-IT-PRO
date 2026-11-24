@@ -8,6 +8,12 @@
 
   <meta name="description" content="DRBCK TECH.IT.PRO à Likasi : dépannage informatique, maintenance, installation de logiciels et assistance informatique.">
 
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#10264a">
+  <meta name="application-name" content="DRBCK TECH.IT.PRO">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="DRBCK TECH.IT.PRO">
+  <link rel="apple-touch-icon" href="logo.jpg">
   <link rel="stylesheet" href="style.css">
 
   <style>
@@ -310,6 +316,13 @@
   </script>
   <!-- Fin assistant flottant LIA -->
 
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./service-worker.js").catch(console.error);
+      });
+    }
+  </script>
   <script src="script.js"></script>
 
   <script>
