@@ -29,21 +29,20 @@ self.addEventListener("fetch", event => {
 
   // Cache les photos distantes (notamment Supabase) pour les visites suivantes.
   if (request.destination === "image" && url.protocol.startsWith("http")) {
+    const refresh = fetch(request).then(response => {
+      if (response && (response.ok || response.type === "opaque")) {
+        return caches.open(IMAGE_CACHE).then(cache =>
+          cache.put(request, response.clone()).then(() => response)
+        );
+      }
+      return response;
+    });
+    event.waitUntil(refresh.then(() => undefined).catch(() => {}));
     event.respondWith((async () => {
       const cache = await caches.open(IMAGE_CACHE);
       const cached = await cache.match(request);
-      const refresh = fetch(request).then(response => {
-        if (response && (response.ok || response.type === "opaque")) {
-          cache.put(request, response.clone()).catch(() => {});
-        }
-        return response;
-      });
-      if (cached) {
-        event.waitUntil(refresh.catch(() => {}));
-        return cached;
-      }
-      try { return await refresh; }
-      catch (error) { throw error; }
+      if (cached) return cached;
+      return refresh;
     })());
     return;
   }
