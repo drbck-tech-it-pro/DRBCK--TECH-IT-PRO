@@ -524,6 +524,32 @@ function setImagePreview(previewId, url) {
   preview.src = url;
   preview.classList.remove("hidden");
 }
+async function optimiserImageAvantEnvoi(file) {
+  if (file.type === "image/gif" || typeof createImageBitmap !== "function") return file;
+  const bitmap = await createImageBitmap(file);
+  try {
+    const maxDimension = 1440;
+    const ratio = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    if (ratio === 1 && file.size <= 180 * 1024) return file;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
+    canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
+    const context = canvas.getContext("2d", { alpha: true });
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    let blob = await new Promise(resolve => canvas.toBlob(resolve, "image/webp", 0.78));
+    if (!blob) return file;
+    if (blob.size > 450 * 1024) {
+      const smaller = await new Promise(resolve => canvas.toBlob(resolve, "image/webp", 0.66));
+      if (smaller && smaller.size < blob.size) blob = smaller;
+    }
+    return blob.size < file.size
+      ? new File([blob], file.name.replace(/\.[^.]+$/, "") + ".webp", { type: "image/webp", lastModified: Date.now() })
+      : file;
+  } finally {
+    bitmap.close?.();
+  }
+}
 async function uploadChosenImage(file, kind, urlInputId, previewId, messageId, button) {
   if (!file) return;
   const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -531,18 +557,23 @@ async function uploadChosenImage(file, kind, urlInputId, previewId, messageId, b
   if (file.size > 5 * 1024 * 1024) { showMessage(messageId, "Image trop volumineuse. Maximum : 5 Mo."); return; }
   const oldText = button.textContent;
   button.disabled = true;
-  button.textContent = "Envoi de la photo...";
+  button.textContent = "Optimisation de la photo...";
   try {
+    const optimizedFile = await optimiserImageAvantEnvoi(file);
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ""));
       reader.onerror = () => reject(new Error("Impossible de lire cette photo."));
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(optimizedFile);
     });
-    const result = await apiRequest("/api/admin/media/upload-image", { method: "POST", body: JSON.stringify({ kind, file_name: file.name, image_data: dataUrl }) });
+    button.textContent = "Envoi de la photo...";
+    const result = await apiRequest("/api/admin/media/upload-image", { method: "POST", body: JSON.stringify({ kind, file_name: optimizedFile.name, image_data: dataUrl }) });
     document.getElementById(urlInputId).value = result.public_url;
     setImagePreview(previewId, result.public_url);
-    showMessage(messageId, "Photo envoyée. Enregistre maintenant le produit ou le service.", "success");
+    const savedKb = Math.round(optimizedFile.size / 1024);
+    const originalKb = Math.round(file.size / 1024);
+    const detail = optimizedFile.size < file.size ? " (" + originalKb + " Ko → " + savedKb + " Ko)" : "";
+    showMessage(messageId, "Photo optimisée et envoyée" + detail + ". Enregistre maintenant le produit ou le service.", "success");
   } catch (error) { showMessage(messageId, error.message || "Échec de l’envoi de la photo."); }
   finally { button.disabled = false; button.textContent = oldText; }
 }
