@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/sitemap.xml
