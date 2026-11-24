@@ -248,3 +248,15 @@ footer {
   font: inherit;
   font-weight: 600;
 }
+
+
+/* Images publiques : dimensions réservées et rendu progressif */
+.service-photo {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  height: auto;
+  min-height: 140px;
+  background: #263449;
+  object-fit: cover;
+  content-visibility: auto;
+}
