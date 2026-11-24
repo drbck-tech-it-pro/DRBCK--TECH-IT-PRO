@@ -104,6 +104,10 @@ async function chargerServicesPublics() {
           img.src = photo;
           img.alt = service.nom || "Photo du service";
           img.loading = "lazy";
+          img.decoding = "async";
+          img.fetchPriority = "low";
+          img.width = 720;
+          img.height = 450;
           img.onerror = () => img.remove();
           card.appendChild(img);
         }
@@ -164,7 +168,7 @@ async function chargerArticlesPublics() {
       const photo = nettoyerUrlPhoto(article.image_url);
       if (photo) {
         const img = element("img", null, "service-photo");
-        img.src = photo; img.alt = article.title || "Photo de publication"; img.loading = "lazy"; img.onerror = () => img.remove();
+        img.src = photo; img.alt = article.title || "Photo de publication"; img.loading = "lazy"; img.decoding = "async"; img.fetchPriority = "low"; img.width = 720; img.height = 450; img.onerror = () => img.remove();
         card.appendChild(img);
       }
       card.appendChild(element("h3", article.title || "Actualité"));
@@ -216,6 +220,10 @@ async function chargerProduitsPublics() {
         image.src = produit.image_url;
         image.alt = produit.name || "Photo du produit";
         image.loading = "lazy";
+        image.decoding = "async";
+        image.fetchPriority = "low";
+        image.width = 720;
+        image.height = 450;
         image.onerror = () => image.remove();
         card.appendChild(image);
       }
