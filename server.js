@@ -525,6 +525,29 @@ const server = http.createServer(async (req, res) => {
 
   const pathname = url.pathname;
 
+  // Fichier robots.txt propre au domaine Render.
+  // Les API publiques utiles peuvent être explorées; les routes privées restent exclues.
+  if (req.method === "GET" && pathname === "/robots.txt") {
+    const robots = [
+      "User-agent: *",
+      "Disallow: /api/",
+      "Allow: /api/services",
+      "Allow: /api/products",
+      "Allow: /api/articles",
+      "Allow: /api/site-settings",
+      "Disallow: /api/admin/",
+      "Disallow: /api/download/",
+      "Sitemap: https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/sitemap.xml",
+      ""
+    ].join("\n");
+    res.writeHead(200, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "public, max-age=3600"
+    });
+    res.end(robots);
+    return;
+  }
+
   try {
 
     // ----------------------------------------------
