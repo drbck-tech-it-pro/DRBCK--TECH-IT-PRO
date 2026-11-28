@@ -102,7 +102,8 @@ async function chargerServicesPublics() {
         if (photo) {
           const img = element("img", null, "service-photo");
           img.src = photo;
-          img.alt = `Service informatique ${service.nom || "DRBCK TECH.IT.PRO"} à Likasi`;\n          img.title = img.alt;
+          img.alt = `Service informatique ${service.nom || "DRBCK TECH.IT.PRO"} à Likasi`;
+          img.title = img.alt;
           img.loading = "lazy";
           img.decoding = "async";
           img.fetchPriority = "low";
