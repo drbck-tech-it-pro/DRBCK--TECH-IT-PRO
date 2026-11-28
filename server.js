@@ -530,11 +530,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && pathname === "/robots.txt") {
     const robots = [
       "User-agent: *",
-      "Disallow: /api/",
-      "Allow: /api/services",
-      "Allow: /api/products",
-      "Allow: /api/articles",
-      "Allow: /api/site-settings",
+      "Allow: /api/",
       "Disallow: /api/admin/",
       "Disallow: /api/download/",
       "Sitemap: https://drbck-tech-it-pro.github.io/DRBCK--TECH-IT-PRO/sitemap.xml",
